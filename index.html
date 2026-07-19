@@ -281,7 +281,7 @@
       Sign in with Google
     </button>
     <div id="loginLoading" class="hidden">যাচাই করা হচ্ছে...</div>
-    <div id="loginError">এই email দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা টুলের মালিকের সাথে যোগাযোগ করুন।</div>
+    <div id="loginError">এই email দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা <a href="https://t.me/faisal_gds" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:600;">টুলের মালিকের সাথে যোগাযোগ করুন</a>।</div>
   </div>
 </div>
 
@@ -2266,8 +2266,9 @@ const firebaseConfig = {
 
 // ২) যাদের access দিতে চাও তাদের Google email এখানে বসাও (ছোট হাতের অক্ষরে)
 const allowedEmails = [
-  "example1@gmail.com",
-  "example2@gmail.com"
+  "businesstitanofficial@gmail.com",
+  "faisalkhangds@gmail.com",
+  "faisalkhanbusinessctg@gmail.com"
 ];
 
 // ============================================================
@@ -2314,7 +2315,7 @@ auth.onAuthStateChanged((user) => {
 
   if (!isAllowed) {
     // লগ-ইন করেছে কিন্তু whitelist-এ নেই
-    loginError.textContent = 'এই email (' + user.email + ') দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা টুলের মালিকের সাথে যোগাযোগ করুন।';
+    loginError.innerHTML = 'এই email (' + user.email + ') দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা <a href="https://t.me/faisal_gds" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:600;">টুলের মালিকের সাথে যোগাযোগ করুন</a>।';
     loginError.classList.add('show');
     loginGate.classList.remove('hidden');
     appContent.classList.add('hidden');
