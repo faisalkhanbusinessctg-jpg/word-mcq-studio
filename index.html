@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --board:#3a160c;
@@ -212,6 +214,46 @@
   .mode-btn-emoji{font-size:24px;}
   .mode-btn-title{font-size:15.5px; font-weight:700; color:var(--chalk);}
   .mode-btn-sub{font-size:12.5px; color:var(--chalk-dim); font-weight:500;}
+  /* ===== LOGIN GATE ===== */
+  #loginGate{
+    position:fixed; inset:0; z-index:999;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--board);
+    padding:20px;
+  }
+  #loginGate.hidden{display:none !important;}
+  .login-card{
+    background:var(--board-2);
+    border:1px solid var(--line-strong);
+    border-radius:var(--radius);
+    padding:36px 28px;
+    max-width:380px;
+    width:100%;
+    text-align:center;
+  }
+  .login-card h2{font-size:19px;margin:0 0 8px;color:var(--chalk);}
+  .login-card p{font-size:13.5px;color:var(--chalk-dim);margin:0 0 22px;line-height:1.7;}
+  #googleSignInBtn{
+    display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    width:100%; padding:12px 16px;
+    background:#fff; color:#3c4043; border:1px solid #dadce0; border-radius:8px;
+    font-family:'Hind Siliguri',sans-serif; font-weight:600; font-size:14.5px; cursor:pointer;
+  }
+  #googleSignInBtn:hover{box-shadow:0 1px 3px rgba(0,0,0,0.25);}
+  #loginError{
+    margin-top:16px; font-size:13px; color:var(--red);
+    display:none;
+  }
+  #loginError.show{display:block;}
+  #loginLoading{font-size:13px; color:var(--chalk-dim);}
+  .user-bar{
+    position:fixed; top:10px; right:10px; z-index:998;
+    display:flex; align-items:center; gap:10px;
+    background:var(--board-2); border:1px solid var(--line-strong); border-radius:999px;
+    padding:6px 14px 6px 6px; font-size:12.5px; color:var(--chalk-dim);
+  }
+  .user-bar img{width:26px;height:26px;border-radius:50%;}
+  .user-bar button{padding:5px 12px; font-size:12px; border-radius:999px;}
   pre#scriptOut{
     background:var(--board);
     border:1px solid var(--line-strong);
@@ -228,7 +270,29 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- ===== LOGIN GATE (Google Sign-In + email whitelist) ===== -->
+<div id="loginGate">
+  <div class="login-card">
+    <h2>🔒 Sign in প্রয়োজন</h2>
+    <p>এই টুলটি ব্যবহার করতে অনুমোদিত Google একাউন্ট দিয়ে সাইন ইন করুন।</p>
+    <button type="button" id="googleSignInBtn">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 18.9 12 24 12c3.1 0 5.8 1.1 8 3l6-6C34.5 6 29.6 4 24 4c-7.5 0-14 4.2-17.7 10.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.6 35.4 27 36 24 36c-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.9 39.7 16.4 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.4C41.6 35.5 44 30.2 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+      Sign in with Google
+    </button>
+    <div id="loginLoading" class="hidden">যাচাই করা হচ্ছে...</div>
+    <div id="loginError">এই email দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা টুলের মালিকের সাথে যোগাযোগ করুন।</div>
+  </div>
+</div>
+
+<!-- ===== USER BAR (visible after successful login) ===== -->
+<div class="user-bar hidden" id="userBar">
+  <img id="userPhoto" src="" alt="">
+  <span id="userEmail"></span>
+  <button type="button" id="signOutBtn">Sign out</button>
+</div>
+
+<div class="wrap hidden" id="appContent">
 
   <header>
     <span class="eyebrow">WORD → PPTX + GOOGLE FORM QUIZ</span>
@@ -2181,6 +2245,91 @@ document.getElementById('gformDownloadBtn').addEventListener('click', ()=>{
 });
 
 updatePreview();
+</script>
+
+<script>
+// ============================================================
+// ==============  LOGIN GATE — এই অংশটুকু এডিট করুন  ==============
+// ============================================================
+
+// ১) নিচের firebaseConfig-এ তোমার Firebase project-এর config বসাও
+//    (Firebase Console > Project settings > General > Your apps > SDK setup and configuration)
+const firebaseConfig = {
+  apiKey: "AIzaSyC64mdTmL_64IsGzVM-0A-XJJGIL1sNYKU",
+  authDomain: "word-to-pptx-or--form.firebaseapp.com",
+  projectId: "word-to-pptx-or--form",
+  storageBucket: "word-to-pptx-or--form.firebasestorage.app",
+  messagingSenderId: "836573816280",
+  appId: "1:836573816280:web:6201e5db15b63c9eb2fead",
+  measurementId: "G-W1Y6Y811ZT"
+};
+
+// ২) যাদের access দিতে চাও তাদের Google email এখানে বসাও (ছোট হাতের অক্ষরে)
+const allowedEmails = [
+  "example1@gmail.com",
+  "example2@gmail.com"
+];
+
+// ============================================================
+// ==============  এর নিচে কিছু এডিট করার দরকার নেই  ==============
+// ============================================================
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+const loginGate = document.getElementById('loginGate');
+const appContent = document.getElementById('appContent');
+const userBar = document.getElementById('userBar');
+const loginError = document.getElementById('loginError');
+const loginLoading = document.getElementById('loginLoading');
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+
+googleSignInBtn.addEventListener('click', () => {
+  loginError.classList.remove('show');
+  loginLoading.classList.remove('hidden');
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch((err) => {
+    loginLoading.classList.add('hidden');
+    loginError.textContent = 'Sign in ব্যর্থ হয়েছে, আবার চেষ্টা করুন। (' + err.message + ')';
+    loginError.classList.add('show');
+  });
+});
+
+document.getElementById('signOutBtn').addEventListener('click', () => {
+  auth.signOut();
+});
+
+auth.onAuthStateChanged((user) => {
+  loginLoading.classList.add('hidden');
+  if (!user) {
+    // লগ-ইন করা নেই
+    loginGate.classList.remove('hidden');
+    appContent.classList.add('hidden');
+    userBar.classList.add('hidden');
+    return;
+  }
+
+  const email = (user.email || '').toLowerCase();
+  const isAllowed = allowedEmails.map(e => e.toLowerCase()).includes(email);
+
+  if (!isAllowed) {
+    // লগ-ইন করেছে কিন্তু whitelist-এ নেই
+    loginError.textContent = 'এই email (' + user.email + ') দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা টুলের মালিকের সাথে যোগাযোগ করুন।';
+    loginError.classList.add('show');
+    loginGate.classList.remove('hidden');
+    appContent.classList.add('hidden');
+    userBar.classList.add('hidden');
+    auth.signOut();
+    return;
+  }
+
+  // Allowed — টুল দেখাও
+  loginGate.classList.add('hidden');
+  appContent.classList.remove('hidden');
+  userBar.classList.remove('hidden');
+  document.getElementById('userPhoto').src = user.photoURL || '';
+  document.getElementById('userEmail').textContent = user.email;
+});
 </script>
 </body>
 </html>
