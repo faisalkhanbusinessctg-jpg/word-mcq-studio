@@ -1,0 +1,2186 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word থেকে PPTX ও Google Form জেনারেটর</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<style>
+  :root{
+    --board:#3a160c;
+    --board-2:#4a1f12;
+    --board-3:#5c2716;
+    --chalk:#fdf3ec;
+    --chalk-dim:#d9b6a8;
+    --yellow:#ED6C47;
+    --red:#B7472A;
+    --line: rgba(253,243,236,0.16);
+    --line-strong: rgba(253,243,236,0.32);
+    --radius: 10px;
+  }
+  body.theme-gform{
+    --board:#122a1c;
+    --board-2:#1b3524;
+    --board-3:#234a30;
+    --chalk:#f2f7f0;
+    --chalk-dim:#b7ccb6;
+    --yellow:#f0b429;
+    --red:#3fae5c;
+    --line: rgba(242,247,240,0.14);
+    --line-strong: rgba(242,247,240,0.30);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at 20% -10%, rgba(243,239,226,0.05), transparent 45%),
+      radial-gradient(ellipse at 90% 110%, rgba(243,239,226,0.04), transparent 40%),
+      var(--board);
+    color:var(--chalk);
+    font-family:'Hind Siliguri', 'Noto Sans Bengali', sans-serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0; pointer-events:none; opacity:0.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap{max-width:900px;margin:0 auto;position:relative;z-index:1;}
+
+  header{margin-bottom:34px;text-align:center;}
+  .eyebrow{
+    display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;
+    color:var(--yellow);border:1px solid var(--line-strong);border-radius:999px;padding:5px 14px;margin-bottom:14px;
+  }
+  h1{font-size:clamp(24px,4vw,34px);font-weight:700;margin:0 0 10px;line-height:1.25;}
+  header p{color:var(--chalk-dim);font-size:15px;max-width:560px;margin:0 auto;line-height:1.7;}
+
+  .step{
+    background:var(--board-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px 22px;
+    margin-bottom:20px;
+    position:relative;
+  }
+  .step-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .badge{
+    width:34px;height:34px;flex:none;border-radius:50%;
+    border:2px solid var(--yellow);color:var(--yellow);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-weight:600;font-size:15px;
+  }
+  .step-head h2{font-size:18px;margin:0;font-weight:600;}
+  .step-head .sub{font-size:13px;color:var(--chalk-dim);margin-top:2px;}
+
+  .drop{
+    display:block;
+    border:2px solid var(--line-strong);
+    border-radius:var(--radius);
+    padding:32px 20px;
+    text-align:center;
+    cursor:pointer;
+    background:var(--board);
+    transition:border-color .2s, background .2s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--yellow); background:rgba(237,108,71,0.08);}
+  .drop input{display:none;}
+  .drop-icon{font-size:28px;margin-bottom:8px;}
+  .drop b{color:var(--chalk);}
+  .filename{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--yellow);}
+
+  button{
+    font-family:'Hind Siliguri',sans-serif;
+    font-weight:600;font-size:14.5px;
+    border-radius:8px;
+    border:1px solid var(--line-strong);
+    background:var(--board-3);
+    color:var(--chalk);
+    padding:11px 20px;
+    cursor:pointer;
+    transition:transform .12s, border-color .2s, background .2s;
+  }
+  button:hover{border-color:var(--yellow);}
+  button:active{transform:scale(0.98);}
+  button.primary{background:var(--yellow);color:#3a160c;border-color:var(--yellow);}
+  button.primary:hover{filter:brightness(1.06);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button.ghost{background:transparent;}
+
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+
+  .count-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;margin-right:14px;}
+  .count-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--chalk);position:relative;z-index:1;padding:6px 12px;}
+  .count-wrap svg{position:absolute;inset:0;width:100%;height:100%;}
+  .count-circle{fill:none;stroke:var(--red);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:180;stroke-dashoffset:180;animation:draw 0.9s ease forwards .15s;}
+  @keyframes draw{to{stroke-dashoffset:0;}}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;}
+  thead th{
+    text-align:left;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.05em;
+    color:var(--chalk-dim);text-transform:uppercase;padding:8px 8px;border-bottom:1px solid var(--line-strong);
+  }
+  tbody td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr.warn td{background:rgba(209,88,76,0.10);}
+  tbody tr.passage-row td{background:rgba(237,108,71,0.08);}
+  tbody tr.passage-row .qText{font-weight:600;min-height:44px;}
+  tbody tr.passage-row .qBody{min-height:78px;}
+  select, textarea, input[type=text], input[type=number]{
+    width:100%;
+    background:var(--board);
+    color:var(--chalk);
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    padding:7px 9px;
+    font-family:'Hind Siliguri',sans-serif;
+    font-size:13.5px;
+    resize:vertical;
+  }
+  textarea{min-height:44px;line-height:1.5;}
+  input[type=number]{width:60px;}
+  input[type=color]{
+    width:100%;
+    height:38px;
+    padding:3px;
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    background:var(--board);
+    cursor:pointer;
+  }
+  .qnum{font-family:'JetBrains Mono',monospace;color:var(--yellow);font-weight:600;padding-top:12px;}
+  .warn-tag{display:inline-block;margin-top:5px;font-size:11.5px;color:var(--red);font-family:'JetBrains Mono',monospace;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;color:var(--chalk-dim);margin-bottom:6px;}
+  .group-title{font-size:14px;color:var(--yellow);font-weight:600;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--line-strong);}
+
+  .instructions{
+    font-size:13.5px;color:var(--chalk-dim);line-height:1.9;
+    background:var(--board);border:1px solid var(--line-strong);border-radius:8px;padding:14px 16px;margin-top:14px;
+  }
+  .instructions b{color:var(--chalk);}
+  .instructions ol{margin:8px 0 0;padding-left:20px;}
+  .instructions li{margin-bottom:10px;}
+  .instructions code{
+    display:inline-block;
+    background:var(--board-2);
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    padding:7px 11px;
+    margin-top:5px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    color:var(--chalk);
+    line-height:1.7;
+  }
+  .hidden{display:none !important;}
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    background:var(--yellow);color:#3a160c;padding:10px 18px;border-radius:8px;font-weight:600;font-size:13.5px;
+    opacity:0;transition:opacity .25s; pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+
+  .preview-box{
+    background:#000;border-radius:8px;overflow:hidden;position:sticky;top:14px;z-index:5;
+    aspect-ratio:16/9;width:100%;max-width:520px;margin:0 auto 18px;
+    font-family:'Hind Siliguri',sans-serif;
+    box-shadow:0 8px 28px rgba(0,0,0,0.45);
+  }
+  .pv-topbar{position:absolute;top:0;left:0;right:0;height:11%;background:#E8720C;display:flex;align-items:center;}
+  .pv-left{flex:0 0 26%;color:#fff;font-size:8.5px;font-weight:500;text-align:left;padding:0 3% 0 4%;}
+  .pv-right{flex:0 0 27%;color:#fff;font-size:9px;font-weight:500;text-align:right;padding:0 4% 0 3%;margin-left:auto;}
+  .pv-mid{flex:1;color:#F5E642;font-weight:700;font-size:11px;text-align:center;padding:0 2%;}
+  .pv-q{position:absolute;top:16%;left:24%;right:4%;color:#fff;font-size:11px;font-weight:700;}
+  .pv-opts{position:absolute;top:22%;left:53%;right:4%;bottom:34%;display:flex;flex-direction:column;justify-content:center;gap:9%;}
+  .pv-opt{color:#fff;font-size:10px;}
+  .pv-ans{position:absolute;bottom:12%;right:12%;background:#E8720C;color:#fff;font-size:10px;font-weight:700;padding:3px 12px;clip-path:polygon(8% 0,100% 0,92% 100%,0 100%);}
+  .pv-line{position:absolute;bottom:7%;left:0;right:0;height:2px;background:#E8720C;}
+  .pv-footer{position:absolute;bottom:1%;left:0;right:0;text-align:center;color:#fff;font-size:8px;font-weight:600;}
+  .mode-choice-row{gap:14px;}
+  .mode-btn{
+    flex:1; min-width:200px; text-align:left; display:flex; flex-direction:column; gap:6px;
+    padding:18px 18px; border-radius:12px;
+  }
+  .mode-btn.selected{border-color:var(--yellow); background:rgba(237,108,71,0.10);}
+  .mode-btn.selected.gform-selected{border-color:#7ee787; background:rgba(126,231,135,0.14);}
+  .mode-btn-emoji{font-size:24px;}
+  .mode-btn-title{font-size:15.5px; font-weight:700; color:var(--chalk);}
+  .mode-btn-sub{font-size:12.5px; color:var(--chalk-dim); font-weight:500;}
+  pre#scriptOut{
+    background:var(--board);
+    border:1px solid var(--line-strong);
+    border-radius:8px;
+    padding:16px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    line-height:1.65;
+    overflow-x:auto;
+    white-space:pre;
+    max-height:480px;
+    color:var(--chalk);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">WORD → PPTX + GOOGLE FORM QUIZ</span>
+    <h1>প্রশ্ন থেকে PowerPoint স্লাইড অথবা Google Form জেনারেটর</h1>
+    <p>Word (.docx) ফাইল দিন — প্রশ্নগুলো বিশ্লেষণ করে আপনি বেছে নিতে পারবেন এখান থেকে কাস্টম ডিজাইনের PPTX স্লাইড বানাবেন, নাকি Google Form Quiz বানানোর কোড জেনারেট করবেন — দুটোই একই জায়গা থেকে।</p>
+    <p style="margin-top:16px;font-size:17px;color:var(--chalk-dim);">Developed by <a href="https://t.me/faisal_gds" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:700;text-decoration:none;font-size:19px;">Faisal Khan</a></p>
+  </header>
+
+  <!-- STEP 1: OUTPUT MODE CHOICE -->
+  <div class="step" id="outputChoiceStep">
+    <div class="step-head">
+      <div class="badge">১</div>
+      <div>
+        <h2>কী বানাতে চান বেছে নিন</h2>
+        <div class="sub">যেকোনো একটা বেছে নিলে ফাইল আপলোডের অপশন চালু হবে — পরে চাইলে অন্যটাও বানাতে পারবেন</div>
+      </div>
+    </div>
+    <div class="row mode-choice-row">
+      <button type="button" class="mode-btn" id="modeChoosePptx">
+        <span class="mode-btn-emoji">🖥️</span>
+        <span class="mode-btn-title">PowerPoint (.pptx) স্লাইড</span>
+        <span class="mode-btn-sub">কাস্টম ডিজাইনের স্লাইড ডাউনলোড হবে</span>
+      </button>
+      <button type="button" class="mode-btn" id="modeChooseGform">
+        <span class="mode-btn-emoji">📋</span>
+        <span class="mode-btn-title">Google Form Quiz</span>
+        <span class="mode-btn-sub">script.google.com এ চালানোর কোড জেনারেট হবে</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step hidden" id="uploadStep">
+    <div class="step-head">
+      <div class="badge">২</div>
+      <div>
+        <h2>Word ফাইল আপলোড করুন</h2>
+        <div class="sub">.docx ফাইল সাপোর্ট করে</div>
+      </div>
+    </div>
+    <label class="drop" id="dropZone">
+      <input type="file" id="fileInput" accept=".docx">
+      <div class="drop-icon">📄</div>
+      <div><b>ফাইল বেছে নিন</b> অথবা এখানে টেনে আনুন</div>
+      <div class="filename" id="fileNameShow"></div>
+    </label>
+    <div class="instructions">
+      <b>Word এর প্রশ্ন থেকে PowerPoint স্লাইড জেনারেট করার জন্য নিচের নিয়মটি অনুসরণ করুনঃ</b>
+      <ol>
+        <li><b>প্রতিটি প্রশ্ন শুরু হবে নম্বর দিয়ে —</b> যেমন:<br><code>১. বাংলাদেশের রাজধানী কোথায়?</code></li>
+        <li><b>অপশনগুলো আলাদা লাইনে দিতে হবে —</b><br><code>ক) চট্টগ্রাম<br>খ) ঢাকা<br>গ) রাজশাহী<br>ঘ) সিলেট</code></li>
+        <li><b>সঠিক উত্তর লিখুন —</b><br><code>উত্তর: খ</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step hidden" id="reviewStep">
+    <div class="step-head">
+      <div class="count-wrap">
+        <span class="count-num" id="qCount">0</span>
+        <svg viewBox="0 0 60 60"><ellipse class="count-circle" cx="30" cy="30" rx="26" ry="20" transform="rotate(-4 30 30)"/></svg>
+      </div>
+      <div>
+        <h2>প্রশ্ন যাচাই ও সংশোধন করুন</h2>
+        <div class="sub">লাল দাগ দেওয়া সারিগুলো একটু চেক করে নিন</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="qTable">
+        <thead>
+          <tr>
+            <th style="width:26px;">#</th>
+            <th>প্রশ্ন</th>
+            <th style="width:220px;">অপশন (এক লাইনে একটি)</th>
+            <th style="width:110px;">সঠিক উত্তর</th>
+          </tr>
+        </thead>
+        <tbody id="qTableBody"></tbody>
+      </table>
+    </div>
+    <details style="margin-top:14px;" open id="rawTextDetails">
+      <summary style="cursor:pointer;color:var(--chalk-dim);font-size:13px;">ফাইল থেকে বের করা কাঁচা টেক্সট (প্রয়োজনে ঠিক করে নিচের বাটনে ক্লিক করুন)</summary>
+      <div class="instructions" style="margin-top:8px;">
+        যদি টেক্সট এলোমেলো মনে হয়, নিচের বক্সে নিজে ঠিক করে <b>আবার প্রশ্ন বের করুন</b> বাটনে ক্লিক করুন।
+      </div>
+      <textarea id="rawTextOut" style="width:100%;min-height:220px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--chalk-dim);margin-top:8px;background:var(--board);padding:10px;border-radius:6px;"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button type="button" id="reparseBtn">🔁 এই টেক্সট থেকে আবার প্রশ্ন বের করুন</button>
+      </div>
+    </details>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step hidden" id="settingsStep">
+    <div class="step-head">
+      <div class="badge">৪</div>
+      <div>
+        <h2>স্লাইড ডিজাইনের তথ্য দিন</h2>
+        <div class="sub">নিচের তথ্য অনুযায়ী স্লাইডের ডিজাইন বসবে</div>
+      </div>
+    </div>
+    <div class="preview-box" id="previewBox">
+      <div class="pv-topbar" id="pvTopbar">
+        <div class="pv-left" id="pvSubject">হিসাববিজ্ঞান ১ম পত্র</div>
+        <div class="pv-mid" id="pvChapter">হিসাববিজ্ঞানের পরিচিতি</div>
+        <div class="pv-right" id="pvBadge">ONESHOT CLASS</div>
+      </div>
+      <div class="pv-q" id="pvQ">০১. হিসাববিজ্ঞানকে কী নামে অভিহিত করা হয়?</div>
+      <div class="pv-opts" id="pvOpts">
+        <div class="pv-opt">ক) হিসাব ব্যবস্থা</div>
+        <div class="pv-opt">খ) তথ্য ব্যবস্থা</div>
+        <div class="pv-opt">গ) নিরীক্ষা ব্যবস্থা</div>
+        <div class="pv-opt">ঘ) বিবরণী ব্যবস্থা</div>
+      </div>
+      <div class="pv-ans" id="pvAns">উত্তর: খ</div>
+      <div class="pv-line"></div>
+      <div class="pv-footer" id="pvFooter">Facebook Page – Click Here</div>
+    </div>
+    <div class="field">
+      <label>বাম পাশের বিষয়ের নাম (উদাহরণ: হিসাববিজ্ঞান ১ম পত্র)</label>
+      <input type="text" id="subjectText" value="হিসাববিজ্ঞান ১ম পত্র">
+    </div>
+    <div class="field">
+      <label>মাঝের চ্যাপ্টার/টপিক শিরোনাম (হলুদ রঙে দেখাবে)</label>
+      <input type="text" id="chapterText" value="হিসাববিজ্ঞানের পরিচিতি">
+      <div id="multiChapterHint" class="hidden" style="margin-top:6px;font-size:13px;color:var(--chalk-dim);"></div>
+    </div>
+    <div class="field">
+      <label>ডান পাশের ব্যাজ টেক্সট</label>
+      <input type="text" id="badgeText" value="ONESHOT CLASS">
+    </div>
+    <div class="field">
+      <label>উপরের বার/বর্ডারের উচ্চতা (ইঞ্চি) — নিজের স্লাইড ছবি দিলে সেই বর্ডারের উচ্চতার সাথে মিলিয়ে দিন, তাহলে লেখাগুলো বর্ডারের মাঝ বরাবর বসবে</label>
+      <input type="number" id="headerH" value="0.9" step="0.05" min="0.3" max="2">
+    </div>
+    <div class="field" style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label>বাম পাশের টেক্সটের ফন্ট সাইজ</label>
+        <input type="number" id="subjectFontSize" value="13" min="8" max="40">
+      </div>
+      <div style="flex:1;">
+        <label>মাঝের চ্যাপ্টার টেক্সটের ফন্ট সাইজ</label>
+        <input type="number" id="chapterFontSize" value="20" min="8" max="40">
+      </div>
+      <div style="flex:1;">
+        <label>ডান পাশের ব্যাজ টেক্সটের ফন্ট সাইজ</label>
+        <input type="number" id="badgeFontSize" value="14" min="8" max="40">
+      </div>
+    </div>
+    <div class="field" style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label>বাম পাশের টেক্সট কোন পাশে থাকবে</label>
+        <select id="subjectAlign">
+          <option value="left" selected>বামে (Left)</option>
+          <option value="center">মাঝে (Center)</option>
+          <option value="right">ডানে (Right)</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+          <input type="checkbox" id="subjectBold" style="width:auto;"> বোল্ড
+        </label>
+      </div>
+      <div style="flex:1;">
+        <label>মাঝের চ্যাপ্টার টেক্সট কোন পাশে থাকবে</label>
+        <select id="chapterAlign">
+          <option value="left">বামে (Left)</option>
+          <option value="center" selected>মাঝে (Center)</option>
+          <option value="right">ডানে (Right)</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+          <input type="checkbox" id="chapterBold" checked style="width:auto;"> বোল্ড
+        </label>
+      </div>
+      <div style="flex:1;">
+        <label>ডান পাশের ব্যাজ টেক্সট কোন পাশে থাকবে</label>
+        <select id="badgeAlign">
+          <option value="left">বামে (Left)</option>
+          <option value="center">মাঝে (Center)</option>
+          <option value="right" selected>ডানে (Right)</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+          <input type="checkbox" id="badgeBold" style="width:auto;"> বোল্ড
+        </label>
+      </div>
+    </div>
+    <div class="field">
+      <label>নিচের ফুটার টেক্সট</label>
+      <input type="text" id="footerText" value="Facebook Page – Click Here">
+    </div>
+    <div class="field">
+      <label>ফুটারের লিংক (Click Here এ যাবে)</label>
+      <input type="text" id="footerLink" value="https://facebook.com">
+    </div>
+    <div class="field">
+      <div class="group-title">📘 প্রশ্ন/অনুচ্ছেদ বক্স</div>
+      <div class="row" style="gap:10px;">
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">X (ইঞ্চি)</label>
+          <input type="number" id="contentX" value="2.3" step="0.1" min="0" max="12">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">Y (ইঞ্চি)</label>
+          <input type="number" id="contentY" value="1.15" step="0.05" min="0" max="6">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">প্রস্থ (ইঞ্চি)</label>
+          <input type="number" id="contentW" value="10.3" step="0.1" min="2" max="13">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">ফন্ট সাইজ</label>
+          <input type="number" id="qFontSize" value="20" min="8" max="60">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">কালার</label>
+          <input type="color" id="qColor" value="#ffffff">
+        </div>
+      </div>
+      <div class="row" style="gap:10px;margin-top:10px;">
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">লাইন স্পেসিং</label>
+          <input type="number" id="qLineSpacing" value="1.5" step="0.1" min="1" max="2.5">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">বক্সের উপরে/নিচে মার্জিন (ইঞ্চি)</label>
+          <input type="number" id="qBoxMarginTB" value="0.02" step="0.01" min="0" max="0.3">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">অপশন বক্সের সাথে ফাঁকা জায়গা (ইঞ্চি)</label>
+          <input type="number" id="qOptGap" value="0.08" step="0.02" min="0" max="1">
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="group-title">📗 অপশন বক্স</div>
+      <div class="row" style="gap:10px;">
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">X (ইঞ্চি)</label>
+          <input type="number" id="optX" value="6.4" step="0.1" min="0" max="13">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">Y (ইঞ্চি)</label>
+          <input type="number" id="optY" value="1.95" step="0.05" min="0" max="6">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">প্রস্থ (ইঞ্চি)</label>
+          <input type="number" id="optW" value="6.4" step="0.1" min="1" max="13">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">ফন্ট সাইজ</label>
+          <input type="number" id="optFontSize" value="18" min="8" max="60">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">কালার</label>
+          <input type="color" id="optColor" value="#ffffff">
+        </div>
+      </div>
+      <div class="row" style="gap:10px;margin-top:10px;">
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">লাইন স্পেসিং</label>
+          <input type="number" id="optLineSpacing" value="1.5" step="0.1" min="1" max="2.5">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">বক্সের উপরে/নিচে মার্জিন (ইঞ্চি)</label>
+          <input type="number" id="optBoxMarginTB" value="0.02" step="0.01" min="0" max="0.3">
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="group-title">📙 উত্তর বক্স (ব্যাজ)</div>
+      <div class="row" style="gap:10px;">
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">X (ইঞ্চি)</label>
+          <input type="number" id="ansShapeX" value="9.7" step="0.1" min="0" max="13">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">Y (ইঞ্চি)</label>
+          <input type="number" id="ansShapeY" value="5.68" step="0.05" min="0" max="7">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">প্রস্থ (ইঞ্চি)</label>
+          <input type="number" id="ansShapeW" value="1.8" step="0.1" min="1" max="6">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">উচ্চতা (ইঞ্চি)</label>
+          <input type="number" id="ansShapeH" value="0.42" step="0.05" min="0.3" max="1.5">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">ফন্ট সাইজ</label>
+          <input type="number" id="ansFontSize" value="14" min="8" max="40">
+        </div>
+        <div style="flex:1;min-width:70px;">
+          <label style="font-size:12px;">কালার</label>
+          <input type="color" id="ansShapeColor" value="#e8720c">
+        </div>
+      </div>
+      <div class="row" style="gap:10px;margin-top:10px;">
+        <div style="flex:1;min-width:220px;">
+          <label style="font-size:12px;">উত্তর দেখানোর অ্যানিমেশন (ক্লিক করলে আসবে)</label>
+          <select id="ansAnimation">
+            <option value="none" selected>অ্যানিমেশন ছাড়া (সাথে সাথে দেখাবে)</option>
+            <option value="appear">Appear — হঠাৎ দেখাবে</option>
+            <option value="fade">Fade In — আস্তে আস্তে ভেসে উঠবে</option>
+            <option value="zoom">Zoom In — ছোট থেকে বড় হয়ে আসবে</option>
+            <option value="wipe_right">Wipe — ডান দিক থেকে খুলে আসবে</option>
+            <option value="wipe_left">Wipe — বাম দিক থেকে খুলে আসবে</option>
+            <option value="wipe_up">Wipe — নিচ থেকে ওপরে খুলে আসবে</option>
+            <option value="wipe_down">Wipe — ওপর থেকে নিচে খুলে আসবে</option>
+            <option value="box">Box In — চারকোণা হয়ে খুলে আসবে</option>
+            <option value="circle">Circle In — বৃত্তাকারে খুলে আসবে</option>
+            <option value="diamond">Diamond In — হীরার আকারে খুলে আসবে</option>
+            <option value="plus">Plus In — প্লাস চিহ্নের মতো খুলে আসবে</option>
+            <option value="wheel">Wheel — চাকার মতো ঘুরে খুলে আসবে</option>
+            <option value="blinds">Blinds — ব্লাইন্ডের মতো ফালি ফালি খুলে আসবে</option>
+            <option value="checker">Checkerboard — দাবার ছকের মতো খুলে আসবে</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>বাংলা প্রশ্নের অপশন লেবেল স্টাইল</label>
+      <select id="bnLabelStyle">
+        <option value="bn_bracket" selected>ক) খ) গ) ঘ)</option>
+        <option value="bn_paren">(ক) (খ) (গ) (ঘ)</option>
+        <option value="bn_num">১) ২) ৩) ৪)</option>
+        <option value="en_bracket">A) B) C) D)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ইংলিশ প্রশ্নের অপশন লেবেল স্টাইল</label>
+      <select id="enLabelStyle">
+        <option value="en_bracket" selected>A) B) C) D)</option>
+        <option value="en_paren">(A) (B) (C) (D)</option>
+        <option value="en_lower">a) b) c) d)</option>
+        <option value="num_bracket">1) 2) 3) 4)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>বাংলা টেক্সট ফন্ট (PowerPoint-এ ইনস্টল থাকা ফন্টের নাম দিন)</label>
+      <input type="text" id="bnFont" value="Kalpurush">
+    </div>
+    <div class="field">
+      <label>ইংলিশ টেক্সট ফন্ট</label>
+      <input type="text" id="enFont" value="Arial">
+    </div>
+    <div class="field">
+      <label>স্লাইড ডিজাইন টেমপ্লেট (ঐচ্ছিক)</label>
+      <div class="instructions" style="margin-top:0;">
+        এখন সরাসরি আপনার <b>.pptx ফাইল</b> আপলোড করতে পারেন — যদি সেই স্লাইডের ব্যাকগ্রাউন্ডে একটা ফুল ছবি বসানো থাকে (ডিজাইন করা ব্যাকগ্রাউন্ড পিকচার হিসেবে), টুলটা সেটা নিজে থেকেই বের করে ব্যবহার করবে। কাজ না করলে (কিছু .pptx-এ শেপ দিয়ে ডিজাইন করা থাকে, ছবি না) স্লাইডটা PNG/JPG এক্সপোর্ট করে সরাসরি ছবিও দিতে পারেন।
+      </div>
+      <input type="file" id="bgTemplateInput" accept="image/png,image/jpeg,.pptx" style="margin-top:8px;">
+      <div class="filename" id="bgTemplateNameShow"></div>
+    </div>
+    <div class="field hidden" id="tplHeaderToggleWrap">
+      <label style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="tplHasHeader" checked style="width:auto;">
+        টেমপ্লেট ছবিতে সাবজেক্ট/চ্যাপ্টার/ব্যাজ লেখা আগে থেকেই আছে (তাহলে ওগুলো আর নতুন করে বসাব না)
+      </label>
+    </div>
+    <div class="field">
+      <label>লোগো ছবি (ঐচ্ছিক — না দিলে লেখা-লোগো বসবে)</label>
+      <input type="file" id="logoInput" accept="image/png,image/jpeg">
+      <div class="filename" id="logoNameShow"></div>
+    </div>
+    <div class="row" style="margin-top:14px; gap:10px;">
+      <button type="button" id="saveSettingsBtn">💾 সেটিংস সেভ করুন</button>
+      <button type="button" id="loadSettingsBtn">♻️ সেভ করা সেটিংস লোড করুন</button>
+    </div>
+    <div class="row" style="margin-top:10px; gap:10px;">
+      <button type="button" id="exportSettingsBtn">⬇️ সেটিংস ফাইল ডাউনলোড করুন</button>
+      <button type="button" id="importSettingsBtn">⬆️ সেটিংস ফাইল ইম্পোর্ট করুন</button>
+      <input type="file" id="importSettingsInput" accept=".json" style="display:none;">
+    </div>
+    <div class="row" style="margin-top:18px;">
+      <button class="primary" id="generateBtn">📥 PPTX ফাইল তৈরি ও ডাউনলোড করুন</button>
+    </div>
+  </div>
+
+  <!-- STEP 4 (Google Form মোড) -->
+  <div class="step hidden" id="gformSettingsStep">
+    <div class="step-head">
+      <div class="badge">৪</div>
+      <div>
+        <h2>ফর্মের তথ্য দিন</h2>
+        <div class="sub">Quiz হিসেবে তৈরি হবে, প্রতিটি প্রশ্নের ডিফল্ট নম্বর ১</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>ফর্মের শিরোনাম</label>
+      <input type="text" id="formTitle" value="প্রশ্নাবলী">
+    </div>
+    <div class="field">
+      <label>বিবরণ (ঐচ্ছিক)</label>
+      <textarea id="formDesc" placeholder="যেমন: প্রথম অধ্যায় — MCQ পরীক্ষা"></textarea>
+    </div>
+    <div class="row">
+      <button class="primary" id="gformGenerateBtn">Google Form জেনারেট করুন</button>
+    </div>
+  </div>
+
+  <!-- STEP 5 (Google Form আউটপুট) -->
+  <div class="step hidden" id="gformOutputStep">
+    <div class="step-head">
+      <div class="badge">৫</div>
+      <div>
+        <h2>জেনারেটেড কোড</h2>
+        <div class="sub">কপি করে script.google.com এ পেস্ট করুন</div>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:12px;">
+      <button id="gformCopyBtn">📋 কোড কপি করুন</button>
+      <button id="gformDownloadBtn">⬇️ কোড ফাইল ডাউনলোড করুন</button>
+    </div>
+    <pre id="scriptOut"></pre>
+    <div class="instructions">
+      <b>যেভাবে ব্যবহার করবেন:</b>
+      <ol>
+        <li><a href="https://script.google.com" target="_blank" style="color:var(--yellow);">script.google.com</a> এ যান এবং <b>New Project</b> ক্লিক করুন</li>
+        <li>খালি এডিটরে যা লেখা আছে তা মুছে উপরের কোডটি পেস্ট করে দিন</li>
+        <li>উপরে ▶️ <b>Run</b> বাটনে ক্লিক করুন (ফাংশন <code>createFormFromData</code> সিলেক্ট করা থাকতে হবে)</li>
+        <li>প্রথমবার চালালে Google পারমিশন চাইবে — নিজের অ্যাকাউন্ট দিয়ে অনুমতি দিন</li>
+        <li>রান শেষ হলে নিচে <b>Execution log</b>-এ ফর্মের লিংক পেয়ে যাবেন</li>
+        <li><b>জরুরি:</b> ফর্ম খুলে Settings ⚙️ → <b>Quizzes</b> ট্যাবে গিয়ে "Release grade" → <b>Immediately after each submission</b> সিলেক্ট করুন এবং "Respondent can see" এর নিচে <b>Missed questions</b>, <b>Correct answers</b>, <b>Point values</b> — এই তিনটা চেকবক্স অন করে দিন, তাহলে পরীক্ষা শেষে শিক্ষার্থী সাথে সাথে তার নাম্বার দেখতে পারবে (এই সেটিংস স্ক্রিপ্ট দিয়ে অটো করা যায় না, একবার ম্যানুয়ালি করলেই হবে)</li>
+      </ol>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">ডাউনলোড শুরু হয়েছে ✓</div>
+
+<script>
+let parsedQuestions = [];
+let selectedMode = null; // 'pptx' | 'gform'
+let parsedHasMultipleChapters = false;
+let logoBase64 = null;
+
+const fileInput = document.getElementById('fileInput');
+const dropZone = document.getElementById('dropZone');
+const fileNameShow = document.getElementById('fileNameShow');
+
+['dragover','dragenter'].forEach(ev=>dropZone.addEventListener(ev, e=>{e.preventDefault();dropZone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev, e=>{e.preventDefault();dropZone.classList.remove('drag');}));
+dropZone.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f){ fileInput.files = e.dataTransfer.files; handleFile(f); }
+});
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) handleFile(f);
+});
+
+function handleFile(file){
+  fileNameShow.textContent = file.name;
+  getRawTextFromFile(file)
+    .then(function(rawText){
+      if((rawText||'').trim().length < 20){
+        alert('এই ফাইল থেকে কোনো লেখা পাওয়া যায়নি। .docx ফাইল দিন।');
+        return;
+      }
+      applyParsedText(rawText, true);
+    })
+    .catch(function(err){
+      alert('ফাইল পড়তে সমস্যা হয়েছে। শুধু .docx ফাইল সাপোর্ট করে। ত্রুটি: ' + err.message);
+    });
+}
+
+// rawText থেকে প্রশ্ন বের করে টেবিল/প্রিভিউ আপডেট করে দেয় — নতুন ফাইল আপলোড করলে এবং
+// "আবার প্রশ্ন বের করুন" বাটনে ক্লিক করলে, দুই ক্ষেত্রেই এই একই ফাংশন কাজ করে।
+// resetModeUI true হলে আগে বাছাই করা আউটপুট-মোড (PPTX/Google Form) লুকিয়ে আবার বাছাই করতে বলা হয় —
+// শুধু নতুন ফাইল আপলোডের সময় এটা করা হয়, ম্যানুয়াল রি-পার্সের সময় আগের বাছাই ধরে রাখা হয়
+function applyParsedText(rawText, resetModeUI){
+  const rawTextOutEl = document.getElementById('rawTextOut');
+  if(rawTextOutEl) rawTextOutEl.value = rawText;
+  const parsed = parseQuestions(rawText);
+  parsedQuestions = parsed.questions;
+  parsedHasMultipleChapters = !!parsed.hasMultipleChapters;
+  if(parsed.chapterGuess){
+    document.getElementById('chapterText').value = parsed.chapterGuess;
+  }
+  const hintEl = document.getElementById('multiChapterHint');
+  if(hintEl){
+    if(parsedHasMultipleChapters){
+      // একাধিক অধ্যায় পেলে সেটা জানিয়ে দিচ্ছি — এই ক্ষেত্রে নিচের বক্সে যা-ই লেখা থাকুক,
+      // প্রতিটা স্লাইডে তার নিজের অধ্যায়ের নামই বসবে (ফাইলে যেভাবে ছিল সেভাবে)
+      hintEl.textContent = '✅ ফাইলে ' + toBnNumber(parsed.chapterNamesFound.length) + 'টি অধ্যায় শনাক্ত হয়েছে: ' + parsed.chapterNamesFound.join(', ') + ' — প্রতিটা স্লাইডে তার নিজের অধ্যায়ের নামই বসবে।';
+      hintEl.classList.remove('hidden');
+    } else {
+      hintEl.textContent = '';
+      hintEl.classList.add('hidden');
+    }
+  }
+  renderTable();
+  updatePreview();
+  document.getElementById('reviewStep').classList.remove('hidden');
+  if(resetModeUI){
+    // ফাইল আপলোডের আগেই মোড (PPTX/Google Form) বাছাই হয়ে গেছে —
+    // তাই এখানে শুধু সেই বাছাই অনুযায়ী সঠিক সেটিংস প্যানেলটা অটো দেখানো হচ্ছে
+    document.getElementById('gformOutputStep').classList.add('hidden');
+    if(selectedMode === 'gform'){
+      document.getElementById('gformSettingsStep').classList.remove('hidden');
+      document.getElementById('settingsStep').classList.add('hidden');
+    } else if(selectedMode === 'pptx'){
+      document.getElementById('settingsStep').classList.remove('hidden');
+      document.getElementById('gformSettingsStep').classList.add('hidden');
+    }
+    document.getElementById('reviewStep').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+
+document.getElementById('reparseBtn').addEventListener('click', ()=>{
+  const rawText = document.getElementById('rawTextOut').value;
+  if((rawText||'').trim().length < 5){
+    alert('বক্সে কোনো টেক্সট নেই।');
+    return;
+  }
+  applyParsedText(rawText, false);
+  showToast('আবার প্রশ্ন বের করা হয়েছে ✓');
+});
+
+// .docx ফাইল mammoth দিয়ে পড়ে কাঁচা টেক্সট বের করা হচ্ছে, যা parseQuestions() ফাংশনে যাবে
+function getRawTextFromFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = function(e){
+      mammoth.extractRawText({arrayBuffer: e.target.result})
+        .then(result => resolve(result.value))
+        .catch(reject);
+    };
+    reader.onerror = function(){ reject(new Error('ফাইলটি পড়া যায়নি')); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function parseQuestions(text){
+  const lines = (text||'').normalize('NFC').split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  const qRe = /^(?:প্রশ্ন\s*[:\-]?\s*)?([0-9০-৯]+)\s*[\.\)।:]\s*(.+)$/;
+  const optRe = /^[\(\[]?\s*([কখগঘঙa-dA-D])\s*[\)\]।.:]\s*(.+)$/;
+  const ansRe = /^(?:সঠিক\s*উত্তর|উত্তর|Answer|Ans)\s*[:\-।]?\s*(.+)$/i;
+  // "i. ...", "ii. ...", "iii. ..." — বহুপদি (statement-based) প্রশ্নের রোমান নাম্বারিং লাইন
+  const romanRe = /^([ivx]+)\s*[\.\)]\s*(.+)$/i;
+  // "নিচের কোনটি সঠিক?" ধরনের সমাপনী লাইন
+  const stmtPromptRe = /নিচের\s*কোনটি\s*(সঠিক|সত্য)/;
+  // "অনুচ্ছেদটি পড়ো এবং ৩ ও ৪ নং প্রশ্নের উত্তর দাও" / "উদ্দীপকটি পড়ো এবং..." ধরনের লাইন —
+  // মাঝে যাই থাকুক (সংখ্যা, "এবং", বুলেট চিহ্ন), এটাকে প্যাসেজ/উদ্দীপকের শুরু হিসেবে ধরা হচ্ছে
+  const passageRe = /(অনুচ্ছেদ|উদ্দীপক)[\s\S]{0,80}?প্রশ্নের\s*উত্তর\s*দাও/;
+
+  // অনেক ওয়ার্ড ফাইলে অপশনগুলো টেবিল/ট্যাব-স্টপ দিয়ে একই লাইনে পাশাপাশি বসানো থাকে —
+  // যেমন "ক) ইতালি    খ) কানাডা" একই লাইনে, বা এমনকি "উত্তর: ক" ও শেষে একই লাইনে জুড়ে থাকে।
+  // mammoth.extractRawText() এমন লাইনকে ট্যাব/একাধিক স্পেসসহ একটাই স্ট্রিং হিসেবে দেয়,
+  // ফলে আগে পুরো লাইনটাই ভুলবশত প্রথম অপশনের টেক্সট হিসেবে ধরা হতো (পরের লেবেলগুলোসহ)।
+  // এই ফাংশনটা এমন লাইন থেকে প্রতিটা অপশনকে আলাদা করে এবং শেষে জোড়া লাগা উত্তরও আলাদা করে বের করে।
+  function splitInlineOptionsAndAnswer(firstLabel, rest){
+    let answerRaw = null;
+    const ansTailRe = /^([\s\S]*?)(?:\t+|[ \u00A0]{2,})(?:সঠিক\s*উত্তর|উত্তর|Answer|Ans)\s*[:\-।]?\s*(\S+)\s*$/i;
+    const atm = rest.match(ansTailRe);
+    if(atm){
+      rest = atm[1];
+      answerRaw = atm[2].trim();
+    }
+    const labelSplitRe = /(?:\t+|[ \u00A0]{2,})(?=[\(\[]?[কখগঘঙa-dA-D]\s*[\)\]।.:])/;
+    const segs = rest.split(labelSplitRe);
+    const opts = [segs[0].trim()];
+    for(let i=1;i<segs.length;i++){
+      const m = segs[i].match(/^[\(\[]?[কখগঘঙa-dA-D]\s*[\)\]।.:]\s*(.+)$/);
+      opts.push(m ? m[1].trim() : segs[i].trim());
+    }
+    return { options: opts, answerRaw };
+  }
+
+  const questions = [];
+  let current = null;
+  let currentPassage = null;
+  let chapterGuess = '';
+  let currentChapter = '';
+  const chapterNamesFound = [];
+  let sawContent = false;
+
+  // "২য় অধ্যায়:", "অধ্যায়-৩ :", "Chapter 2:" ইত্যাদি প্রিফিক্স বাদ দিয়ে শুধু আসল
+  // অধ্যায়ের নামটুকু রাখার জন্য —
+  function stripChapterPrefix(text){
+    let t = String(text || '').trim();
+    // নাম্বার/অর্ডিনাল আগে, তারপর "অধ্যায়" — যেমন "২য় অধ্যায়:", "৩ অধ্যায় -"
+    t = t.replace(/^[০-৯0-9]+\s*(?:ম|য়|র্থ|ষ্ঠ|তম)?\s*অধ্যায়\s*[:ঃ\-–—.]?\s*/u, '');
+    // "অধ্যায়" আগে, তারপর নাম্বার — যেমন "অধ্যায় ২:", "অধ্যায়-৩ :"
+    t = t.replace(/^অধ্যায়\s*[:ঃ\-–—]?\s*[০-৯0-9]+\s*[:ঃ\-–—.]?\s*/u, '');
+    // ইংরেজিতে "Chapter 2:" ইত্যাদি
+    t = t.replace(/^chapter\s*[:ঃ\-–—]?\s*\d+\s*[:ঃ\-–—.]?\s*/i, '');
+    return t.trim() || String(text || '').trim();
+  }
+
+  // কোনো লাইন আসলেই "অধ্যায়ের নাম বলে দেওয়া" লাইন কিনা সেটা যাচাই করার জন্য —
+  // এইটা মিলে গেলে লাইনটাকে প্রশ্ন/অপশন/উত্তরের অংশ হিসেবে না ধরে নতুন অধ্যায়ের শুরু হিসেবে ধরা হবে,
+  // যাতে একটা ওয়ার্ড ফাইলের মাঝে একাধিক অধ্যায় থাকলে প্রতিটা প্রশ্ন তার নিজের অধ্যায়ের নামটাই পায়
+  const chapterHeadingTestRe = /^(?:[০-৯0-9]+\s*(?:ম|য়|র্থ|ষ্ঠ|তম)?\s*অধ্যায়|অধ্যায়\s*[:ঃ\-–—]?\s*[০-৯0-9]+|chapter\s*[:ঃ\-–—]?\s*\d+)/iu;
+
+  for(const line of lines){
+    // লাইনটা যদি "২য় অধ্যায়:", "অধ্যায়-৩:", "Chapter 2:" ইত্যাদি প্যাটার্নের অধ্যায়-হেডিং হয়,
+    // তাহলে সেটাকে প্রশ্ন/অপশন/উত্তরের অংশ হিসেবে না ধরে নতুন অধ্যায়ের শুরু হিসেবে ধরে নিচ্ছি —
+    // ডকুমেন্টের শুরুতে হোক বা মাঝখানে, যেখানেই এমন লাইন আসুক না কেন। এতে একই ফাইলে
+    // একাধিক অধ্যায় থাকলে প্রতিটা প্রশ্ন নিজের অধ্যায়ের নামটাই স্লাইডে পাবে।
+    if(chapterHeadingTestRe.test(line)){
+      const chName = stripChapterPrefix(line);
+      currentChapter = chName;
+      // chapterGuess (সেটিংস বক্সে অটো-বসানোর জন্য) শুধু তখনই ধরা হবে যখন এই হেডিংটা
+      // প্রথম প্রশ্নের আগে পাওয়া গেছে — মাঝ-ডকুমেন্টের হেডিং থেকে এটা বসানো ঠিক না,
+      // নাহলে ডকুমেন্টের শুরুর দিকের "নামহীন" প্রশ্নগুলোও ভুলে পরের অধ্যায়ের নাম পেয়ে যেত
+      if(!sawContent && !chapterGuess) chapterGuess = chName;
+      if(chName) chapterNamesFound.push(chName);
+      continue;
+    }
+
+    const pm = line.match(passageRe);
+    const qm = !pm ? line.match(qRe) : null;
+    // রোমান স্টেটমেন্ট আর "নিচের কোনটি সঠিক" লাইন শুধু তখনই ধরা হবে যখন এখনো আসল
+    // অপশন (ক/খ/গ/ঘ) শুরু হয়নি — নাহলে অপশনের লেখাতেও ভুল করে মিলে যেতে পারে
+    const rm = (!pm && !qm && current && current.options.length === 0) ? line.match(romanRe) : null;
+    const spm = (!pm && !qm && !rm && current && current.options.length === 0) ? stmtPromptRe.test(line) : false;
+    const om = (!pm && !qm && !rm && !spm) ? line.match(optRe) : null;
+    const am = (!pm && !qm && !rm && !spm && !om) ? line.match(ansRe) : null;
+
+    if(pm){
+      sawContent = true;
+      if(current){ questions.push(current); current = null; }
+      currentPassage = { type:'passage', text: line, body: '', options: [], answerRaw: '', chapter: currentChapter };
+      questions.push(currentPassage);
+    } else if(qm){
+      sawContent = true;
+      currentPassage = null;
+      if(current) questions.push(current);
+      // qm[1] হলো ওয়ার্ড ফাইলে যেভাবে নাম্বার দেওয়া আছে (অধ্যায়ভিত্তিক হলেও), সেটা রেখে দিচ্ছি —
+      // যাতে স্লাইডে গোনার বদলে ফাইলের আসল নাম্বারটাই দেখানো যায়
+      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter };
+    } else if(rm){
+      if(!current.statements) current.statements = [];
+      current.statements.push({ label: rm[1], text: rm[2].trim() });
+    } else if(spm){
+      current.statementPrompt = line;
+    } else if(om && current){
+      const split = splitInlineOptionsAndAnswer(om[1], om[2]);
+      split.options.forEach(o => current.options.push(o));
+      if(split.answerRaw) current.answerRaw = split.answerRaw;
+      current.type = 'mcq';
+    } else if(am && current){
+      current.answerRaw = am[1].trim();
+    } else if(current){
+      if(current.options.length === 0 && !current.answerRaw && !(current.statements && current.statements.length)){
+        current.text += ' ' + line;
+      }
+    } else if(currentPassage){
+      currentPassage.body = currentPassage.body ? (currentPassage.body + ' ' + line) : line;
+    } else if(!sawContent){
+      // কোনো লাইন প্রথম প্রশ্নের আগে পেলে সেটাকে অধ্যায়ের নাম হিসেবে ধরে নিচ্ছি —
+      // তবে লাইনের শুরুতে "২য় অধ্যায়:" জাতীয় নাম্বার/অর্ডিনাল প্রিফিক্স থাকলে সেটা বাদ দিয়ে
+      // শুধু আসল অধ্যায়ের নামটাই রাখা হচ্ছে
+      if(!chapterGuess) chapterGuess = stripChapterPrefix(line);
+    }
+  }
+  if(current) questions.push(current);
+  // hasMultipleChapters এখন সরাসরি প্রশ্নগুলোর নিজের chapter মান থেকে হিসাব করা হচ্ছে —
+  // এতে "প্রথম অধ্যায়ে কোনো হেডিং নেই, কিন্তু দ্বিতীয় অধ্যায়ে আছে" এই কমন কেসটাও ধরা পড়বে
+  // (আগে শুধু distinct হেডিং সংখ্যা গোনা হতো, ফলে এই কেসে ভুলভাবে "একটাই অধ্যায়" ধরা হতো)
+  const distinctChapterValues = new Set(questions.map(q => q.chapter || ''));
+  const hasMultipleChapters = distinctChapterValues.size > 1;
+  return { questions, chapterGuess, chapterNamesFound, hasMultipleChapters };
+}
+
+const bnDigits = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+function toBnNumber(n){
+  return String(n).split('').map(ch => (ch >= '0' && ch <= '9') ? bnDigits[+ch] : ch).join('');
+}
+const bnOptionLabels = ['ক','খ','গ','ঘ','ঙ','চ','ছ','জ','ঝ','ঞ'];
+const enOptionLabels = ['A','B','C','D','E','F','G','H','I','J'];
+function isBengaliText(s){
+  return /[\u0980-\u09FF]/.test(s||'');
+}
+function optLabel(i, isBn){
+  const arr = isBn ? bnOptionLabels : enOptionLabels;
+  return arr[i] || String(i+1);
+}
+
+function resolveCorrectIndex(q){
+  if(q.type !== 'mcq' || q.options.length === 0) return -1;
+  const raw = (q.answerRaw||'').trim();
+  if(!raw) return -1;
+  const labelMap = {'ক':0,'খ':1,'গ':2,'ঘ':3,'ঙ':4,'a':0,'b':1,'c':2,'d':3,'e':4};
+  const lower = raw.toLowerCase().replace(/[).।\s]/g,'');
+  if(labelMap.hasOwnProperty(lower)) return labelMap[lower];
+  if(labelMap.hasOwnProperty(raw)) return labelMap[raw];
+  const idx = q.options.findIndex(o => o.trim().toLowerCase() === raw.toLowerCase());
+  if(idx !== -1) return idx;
+  const idx2 = q.options.findIndex(o => o.toLowerCase().includes(raw.toLowerCase()) && raw.length > 1);
+  return idx2;
+}
+
+function hasDuplicateOptions(q){
+  if(!q.options || q.options.length < 2) return false;
+  const seen = new Set();
+  for(const opt of q.options){
+    const norm = opt.trim().toLowerCase();
+    if(!norm) continue;
+    if(seen.has(norm)) return true;
+    seen.add(norm);
+  }
+  return false;
+}
+
+function warnMessages(q){
+  const msgs = [];
+  if(q.type === 'passage'){
+    if(!(q.body||'').trim()) msgs.push('⚠ অনুচ্ছেদ/উদ্দীপকের লেখা খালি');
+    return msgs;
+  }
+  const correctIdx = resolveCorrectIndex(q);
+  if(!q.text.trim()) msgs.push('⚠ প্রশ্ন খালি');
+  if(q.type === 'mcq' && correctIdx === -1) msgs.push('⚠ উত্তর মিলছে না, চেক করুন');
+  if(hasDuplicateOptions(q)) msgs.push('⚠ ডুপ্লিকেট অপশন আছে');
+  return msgs;
+}
+
+// q.statements (i, ii, iii) আর q.statementPrompt ("নিচের কোনটি সঠিক?") + আসল অপশন —
+// এই সবকিছু একটাই টেক্সটএরিয়ায় দেখানো/এডিট করার জন্য একটা স্ট্রিং বানানো হচ্ছে
+function buildOptsTextareaValue(q){
+  let lines = [];
+  if(q.statements && q.statements.length){
+    lines = lines.concat(q.statements.map(s => s.label + '. ' + s.text));
+    lines.push(q.statementPrompt || 'নিচের কোনটি সঠিক?');
+  }
+  lines = lines.concat(q.options);
+  return lines.join('\n');
+}
+
+function renderTable(){
+  const tbody = document.getElementById('qTableBody');
+  tbody.innerHTML = '';
+
+  let qNumCounter = 0;
+  parsedQuestions.forEach((q, i)=>{
+    const tr = document.createElement('tr');
+    const msgs = warnMessages(q);
+    const needsWarn = msgs.length > 0;
+    if(needsWarn) tr.classList.add('warn');
+
+    if(q.type === 'passage'){
+      tr.classList.add('passage-row');
+      tr.innerHTML = `
+        <td class="qnum">📖</td>
+        <td><textarea data-idx="${i}" class="qText" placeholder="অনুচ্ছেদ/উদ্দীপকের নির্দেশনা">${escapeHtml(q.text)}</textarea></td>
+        <td colspan="2"><textarea data-idx="${i}" class="qBody" placeholder="অনুচ্ছেদ/উদ্দীপকের মূল লেখা">${escapeHtml(q.body||'')}</textarea>
+          ${msgs.map(m=>`<div class="warn-tag">${m}</div>`).join('')}
+        </td>
+      `;
+    } else {
+      qNumCounter++;
+      const displayNum = q.origNum ? toBnNumber(q.origNum) : qNumCounter;
+      tr.innerHTML = `
+        <td class="qnum">${displayNum}</td>
+        <td><textarea data-idx="${i}" class="qText">${escapeHtml(q.text)}</textarea></td>
+        <td><textarea data-idx="${i}" class="qOpts" placeholder="i, ii, iii থাকলে সেগুলোসহ প্রতি লাইনে একটি করে লিখুন">${escapeHtml(buildOptsTextareaValue(q))}</textarea></td>
+        <td>
+          <input type="text" data-idx="${i}" class="qAns" value="${escapeHtml(q.answerRaw)}" placeholder="যেমন: খ">
+          ${msgs.map(m=>`<div class="warn-tag">${m}</div>`).join('')}
+        </td>
+      `;
+    }
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('qCount').textContent = parsedQuestions.length;
+
+  tbody.querySelectorAll('.qText').forEach(el=>el.addEventListener('input', onEdit));
+  tbody.querySelectorAll('.qOpts').forEach(el=>el.addEventListener('input', onEdit));
+  tbody.querySelectorAll('.qAns').forEach(el=>el.addEventListener('input', onEdit));
+  tbody.querySelectorAll('.qBody').forEach(el=>el.addEventListener('input', onEdit));
+}
+
+function onEdit(e){
+  const i = parseInt(e.target.dataset.idx, 10);
+  const q = parsedQuestions[i];
+  const row = e.target.closest('tr');
+  if(e.target.classList.contains('qText')) q.text = e.target.value;
+  if(e.target.classList.contains('qBody')) q.body = e.target.value;
+  if(e.target.classList.contains('qOpts')){
+    // টেক্সটএরিয়ার লাইনগুলো থেকে আবার আলাদা করে বের করা হচ্ছে: রোমান স্টেটমেন্ট,
+    // "নিচের কোনটি সঠিক" লাইন, আর আসল ক/খ/গ/ঘ অপশন
+    const romanRe = /^([ivx]+)\s*[\.\)]\s*(.+)$/i;
+    const stmtPromptRe = /নিচের\s*কোনটি\s*(সঠিক|সত্য)/;
+    const rawLines = e.target.value.split('\n').map(s=>s.trim()).filter(s=>s.length>0);
+    const statements = [];
+    let statementPrompt = '';
+    const options = [];
+    rawLines.forEach(line=>{
+      const rm = options.length === 0 ? line.match(romanRe) : null;
+      if(rm){
+        statements.push({ label: rm[1], text: rm[2].trim() });
+      } else if(options.length === 0 && stmtPromptRe.test(line)){
+        statementPrompt = line;
+      } else {
+        options.push(line);
+      }
+    });
+    q.statements = statements.length ? statements : undefined;
+    q.statementPrompt = statementPrompt || undefined;
+    q.options = options;
+    q.type = q.options.length > 0 ? 'mcq' : 'short';
+  }
+  if(e.target.classList.contains('qAns')) q.answerRaw = e.target.value;
+
+  const msgs = warnMessages(q);
+  row.classList.toggle('warn', msgs.length > 0);
+  const msgHost = q.type === 'passage' ? row.querySelector('.qBody').parentElement : row.querySelector('.qAns').parentElement;
+  const existingTags = msgHost.querySelectorAll('.warn-tag');
+  existingTags.forEach(t=>t.remove());
+  msgs.forEach(m=>{
+    const div = document.createElement('div');
+    div.className = 'warn-tag';
+    div.textContent = m;
+    msgHost.appendChild(div);
+  });
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// live preview updates — সেটিংসের যেকোনো ফিল্ড বদলালেই নিচের প্রিভিউ আপডেট হবে
+const settingsStepEl = document.getElementById('settingsStep');
+if(settingsStepEl){
+  settingsStepEl.addEventListener('input', updatePreview);
+  settingsStepEl.addEventListener('change', updatePreview);
+}
+
+function getVal(id, fallback){
+  const el = document.getElementById(id);
+  if(!el) return fallback;
+  if(el.type === 'checkbox') return el.checked;
+  const v = el.value;
+  if(el.type === 'number'){
+    const n = parseFloat(v);
+    return isNaN(n) ? fallback : n;
+  }
+  return v === '' ? fallback : v;
+}
+
+function updatePreview(){
+  const box = document.getElementById('previewBox');
+  if(!box) return;
+  const scale = box.clientWidth / 13.333; // px per inch, বাস্তব রেন্ডার সাইজ অনুযায়ী
+  const ptToPx = pt => (pt * scale) / 72;
+
+  const subjectText = getVal('subjectText','বিষয়');
+  const chapterText = getVal('chapterText','অধ্যায়');
+  const badgeText = getVal('badgeText','ONESHOT CLASS');
+  const footerText = getVal('footerText','');
+  const headerH = getVal('headerH', 0.9);
+
+  const pvTopbar = document.getElementById('pvTopbar');
+  const pvSubject = document.getElementById('pvSubject');
+  const pvChapter = document.getElementById('pvChapter');
+  const pvBadge = document.getElementById('pvBadge');
+  const pvQ = document.getElementById('pvQ');
+  const pvOpts = document.getElementById('pvOpts');
+  const pvAns = document.getElementById('pvAns');
+  const pvFooter = document.getElementById('pvFooter');
+
+  pvSubject.textContent = subjectText;
+  pvChapter.textContent = chapterText;
+  pvBadge.textContent = badgeText;
+  pvFooter.textContent = footerText;
+
+  pvTopbar.style.height = (headerH * scale) + 'px';
+
+  pvSubject.style.textAlign = getVal('subjectAlign','left');
+  pvChapter.style.textAlign = getVal('chapterAlign','center');
+  pvBadge.style.textAlign = getVal('badgeAlign','right');
+  pvSubject.style.fontWeight = getVal('subjectBold', false) ? '700' : '500';
+  pvChapter.style.fontWeight = getVal('chapterBold', true) ? '700' : '500';
+  pvBadge.style.fontWeight = getVal('badgeBold', false) ? '700' : '500';
+  pvSubject.style.fontSize = ptToPx(getVal('subjectFontSize',13)) + 'px';
+  pvChapter.style.fontSize = ptToPx(getVal('chapterFontSize',20)) + 'px';
+  pvBadge.style.fontSize = ptToPx(getVal('badgeFontSize',14)) + 'px';
+
+  // প্রশ্ন/অনুচ্ছেদ বক্স
+  const cX = getVal('contentX', 2.3), cY = getVal('contentY', 1.15), cW = getVal('contentW', 10.3);
+  pvQ.style.left = (cX * scale) + 'px';
+  pvQ.style.top = (cY * scale) + 'px';
+  pvQ.style.width = (cW * scale) + 'px';
+  pvQ.style.right = 'auto';
+  pvQ.style.fontSize = ptToPx(getVal('qFontSize', 20)) + 'px';
+  pvQ.style.color = getVal('qColor', '#ffffff');
+  pvQ.style.lineHeight = String(getVal('qLineSpacing', 1.5));
+
+  // অপশন বক্স
+  const oX = getVal('optX', 6.4), oY = getVal('optY', 1.95), oW = getVal('optW', 6.4);
+  pvOpts.style.left = (oX * scale) + 'px';
+  pvOpts.style.top = (oY * scale) + 'px';
+  pvOpts.style.width = (oW * scale) + 'px';
+  pvOpts.style.right = 'auto';
+  pvOpts.style.bottom = 'auto';
+  const optColor = getVal('optColor', '#ffffff');
+  const optFontSizePx = ptToPx(getVal('optFontSize', 18)) + 'px';
+  pvOpts.querySelectorAll('.pv-opt').forEach(el=>{
+    el.style.color = optColor;
+    el.style.fontSize = optFontSizePx;
+    el.style.lineHeight = String(getVal('optLineSpacing', 1.5));
+  });
+
+  // উত্তরের ব্যাজ — এখন সরাসরি X/Y সেটিংস থেকে বসবে
+  const ansW = getVal('ansShapeW', 1.8), ansH = getVal('ansShapeH', 0.42);
+  const ansX = getVal('ansShapeX', 9.7), ansY = getVal('ansShapeY', 5.68);
+  pvAns.style.left = (ansX * scale) + 'px';
+  pvAns.style.top = (ansY * scale) + 'px';
+  pvAns.style.width = (ansW * scale) + 'px';
+  pvAns.style.height = (ansH * scale) + 'px';
+  pvAns.style.right = 'auto';
+  pvAns.style.bottom = 'auto';
+  pvAns.style.display = 'flex';
+  pvAns.style.alignItems = 'center';
+  pvAns.style.justifyContent = 'center';
+  pvAns.style.background = getVal('ansShapeColor', '#e8720c');
+  pvAns.style.fontSize = ptToPx(getVal('ansFontSize', 14)) + 'px';
+}
+
+window.addEventListener('resize', ()=>{ clearTimeout(window.__pvResizeT); window.__pvResizeT = setTimeout(updatePreview, 120); });
+
+// সেটিংস সেভ/লোড — এই টুলটা ব্রাউজারেই চলে, তাই সেটিংস browser-এর localStorage-এ সেভ থাকে (এই ডিভাইসেই)
+const SETTINGS_STORAGE_KEY = 'wtp_business_titan_settings_v1';
+function collectSettingsIds(){
+  if(!settingsStepEl) return [];
+  return Array.from(settingsStepEl.querySelectorAll('input[id], select[id], textarea[id]'))
+    .filter(el => el.type !== 'file')
+    .map(el => el.id);
+}
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  const original = toast.textContent;
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(()=>{ toast.classList.remove('show'); setTimeout(()=>{ toast.textContent = original; }, 300); }, 2200);
+}
+function collectSettingsData(){
+  const data = {};
+  collectSettingsIds().forEach(id=>{
+    const el = document.getElementById(id);
+    data[id] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  return data;
+}
+function applySettingsData(data){
+  Object.keys(data).forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.type === 'checkbox') el.checked = !!data[id];
+    else el.value = data[id];
+  });
+  updatePreview();
+}
+function saveSettingsToStorage(silent){
+  try{
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(collectSettingsData()));
+    if(!silent) showToast('সেটিংস সেভ হয়েছে ✓');
+  } catch(err){
+    if(!silent) showToast('সেভ করা যায়নি: ' + err.message);
+  }
+}
+function loadSettingsFromStorage(silent){
+  let raw;
+  try{ raw = localStorage.getItem(SETTINGS_STORAGE_KEY); } catch(err){ raw = null; }
+  if(!raw){
+    if(!silent) showToast('কোনো সেভ করা সেটিংস পাওয়া যায়নি');
+    return;
+  }
+  try{
+    applySettingsData(JSON.parse(raw));
+    if(!silent) showToast('সেভ করা সেটিংস লোড হয়েছে ✓');
+  } catch(err){
+    if(!silent) showToast('লোড করা যায়নি: ' + err.message);
+  }
+}
+document.getElementById('saveSettingsBtn').addEventListener('click', ()=>saveSettingsToStorage(false));
+document.getElementById('loadSettingsBtn').addEventListener('click', ()=>loadSettingsFromStorage(false));
+// পেজ লোড হওয়ার সময় আগের সেভ করা সেটিংস থাকলে চুপচাপ বসিয়ে দেয়
+loadSettingsFromStorage(true);
+
+// সেটিংস ফাইল হিসেবে ডাউনলোড ও ইম্পোর্ট — যাতে অন্য ডিভাইসেও একই ডিজাইন সেটিংস নিয়ে যাওয়া যায়
+document.getElementById('exportSettingsBtn').addEventListener('click', ()=>{
+  try{
+    const data = collectSettingsData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'quiz-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('সেটিংস ফাইল ডাউনলোড হয়েছে ✓');
+  } catch(err){
+    showToast('ডাউনলোড করা যায়নি: ' + err.message);
+  }
+});
+const importSettingsInput = document.getElementById('importSettingsInput');
+document.getElementById('importSettingsBtn').addEventListener('click', ()=>importSettingsInput.click());
+importSettingsInput.addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      applySettingsData(data);
+      showToast('সেটিংস ফাইল ইম্পোর্ট হয়েছে ✓');
+    } catch(err){
+      showToast('ফাইলটি পড়া যায়নি: ' + err.message);
+    }
+    importSettingsInput.value = '';
+  };
+  reader.readAsText(file);
+});
+
+const logoInput = document.getElementById('logoInput');
+const logoNameShow = document.getElementById('logoNameShow');
+logoInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  logoNameShow.textContent = f.name;
+  const reader = new FileReader();
+  reader.onload = ev=>{ logoBase64 = ev.target.result; };
+  reader.readAsDataURL(f);
+});
+
+let bgTemplateBase64 = null;
+const bgTemplateInput = document.getElementById('bgTemplateInput');
+const bgTemplateNameShow = document.getElementById('bgTemplateNameShow');
+const tplHeaderToggleWrap = document.getElementById('tplHeaderToggleWrap');
+
+function parseXmlDoc(str){
+  return new DOMParser().parseFromString(str, 'application/xml');
+}
+
+function parseThemeColors(themeDoc){
+  const theme = {};
+  const scheme = themeDoc.getElementsByTagName('a:clrScheme')[0];
+  if(!scheme) return theme;
+  ['dk1','lt1','dk2','lt2','accent1','accent2','accent3','accent4','accent5','accent6','hlink','folHlink'].forEach(name=>{
+    const el = scheme.getElementsByTagName('a:'+name)[0];
+    if(!el) return;
+    const srgb = el.getElementsByTagName('a:srgbClr')[0];
+    const sys = el.getElementsByTagName('a:sysClr')[0];
+    if(srgb) theme[name] = srgb.getAttribute('val').toUpperCase();
+    else if(sys) theme[name] = (sys.getAttribute('lastClr') || '000000').toUpperCase();
+  });
+  return theme;
+}
+
+function resolveColorNode(fillEl, theme){
+  if(!fillEl) return null;
+  const srgb = fillEl.getElementsByTagName('a:srgbClr')[0];
+  if(srgb) return srgb.getAttribute('val').toUpperCase();
+  const scheme = fillEl.getElementsByTagName('a:schemeClr')[0];
+  if(scheme && theme){
+    const aliasMap = { bg1:'lt1', tx1:'dk1', bg2:'lt2', tx2:'dk2' };
+    let val = scheme.getAttribute('val');
+    val = aliasMap[val] || val;
+    if(theme[val]) return theme[val];
+  }
+  const sys = fillEl.getElementsByTagName('a:sysClr')[0];
+  if(sys) return (sys.getAttribute('lastClr') || '000000').toUpperCase();
+  return null;
+}
+
+function colorFromContainer(container, theme){
+  if(!container) return null;
+  const solid = container.getElementsByTagName('a:solidFill')[0];
+  if(solid) return resolveColorNode(solid, theme);
+  const grad = container.getElementsByTagName('a:gradFill')[0];
+  if(grad){
+    const stop = grad.getElementsByTagName('a:gs')[0];
+    if(stop) return resolveColorNode(stop, theme);
+  }
+  return null;
+}
+
+function loadImageFromZipEntry(zip, target){
+  return new Promise(async resolve=>{
+    const imgFile = zip.file(target);
+    if(!imgFile){ resolve(null); return; }
+    try{
+      const blob = await imgFile.async('blob');
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = ()=>{ resolve(img); setTimeout(()=>URL.revokeObjectURL(url), 2000); };
+      img.onerror = ()=> resolve(null);
+      img.src = url;
+    } catch(e){ resolve(null); }
+  });
+}
+
+// পুরো স্লাইডটা (ব্যাকগ্রাউন্ড + সব শেপ + বর্ডার + লেখা + ছবি) একটা ক্যানভাসে রিবিল্ড করে
+// একটা exact-looking ছবি বানায়, শুধু একটা full-bleed picture খোঁজার বদলে
+async function renderPptxSlideToImage(file){
+  const zip = await JSZip.loadAsync(file);
+  const slideFile = zip.file('ppt/slides/slide1.xml');
+  const relsFile = zip.file('ppt/slides/_rels/slide1.xml.rels');
+  const presFile = zip.file('ppt/presentation.xml');
+  if(!slideFile) return null;
+
+  const slideDoc = parseXmlDoc(await slideFile.async('string'));
+  const relsDoc = relsFile ? parseXmlDoc(await relsFile.async('string')) : null;
+
+  let theme = null;
+  const themeFile = zip.file('ppt/theme/theme1.xml');
+  if(themeFile) theme = parseThemeColors(parseXmlDoc(await themeFile.async('string')));
+
+  let slideCx = 12192000, slideCy = 6858000;
+  if(presFile){
+    const presDoc = parseXmlDoc(await presFile.async('string'));
+    const sldSz = presDoc.getElementsByTagName('p:sldSz')[0];
+    if(sldSz){
+      slideCx = parseInt(sldSz.getAttribute('cx'), 10);
+      slideCy = parseInt(sldSz.getAttribute('cy'), 10);
+    }
+  }
+
+  const targetW = 1920;
+  const scale = targetW / slideCx;
+  const targetH = Math.round(slideCy * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW; canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+
+  function resolveEmbedTarget(embedId){
+    if(!relsDoc) return null;
+    const rels = relsDoc.getElementsByTagName('Relationship');
+    for(let i=0;i<rels.length;i++){
+      if(rels[i].getAttribute('Id') === embedId){
+        let t = rels[i].getAttribute('Target');
+        if(t.startsWith('../')) t = 'ppt/' + t.slice(3);
+        else if(!t.startsWith('ppt/')) t = 'ppt/slides/' + t;
+        return t;
+      }
+    }
+    return null;
+  }
+
+  function drawGeomPath(prst, x, y, w, h){
+    ctx.beginPath();
+    if(prst === 'ellipse'){
+      ctx.ellipse(x+w/2, y+h/2, Math.max(w/2,0.1), Math.max(h/2,0.1), 0, 0, Math.PI*2);
+    } else if(prst && prst.indexOf('round') === 0){
+      const r = Math.min(w,h) * 0.15;
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+      ctx.closePath();
+    } else if(prst === 'chevron' || prst === 'homePlate'){
+      const cut = w*0.18;
+      ctx.moveTo(x, y); ctx.lineTo(x+w-cut, y); ctx.lineTo(x+w, y+h/2);
+      ctx.lineTo(x+w-cut, y+h); ctx.lineTo(x, y+h); ctx.lineTo(x+cut, y+h/2);
+      ctx.closePath();
+    } else if(prst === 'parallelogram'){
+      const skew = w*0.18;
+      ctx.moveTo(x+skew, y); ctx.lineTo(x+w, y); ctx.lineTo(x+w-skew, y+h); ctx.lineTo(x, y+h);
+      ctx.closePath();
+    } else {
+      ctx.rect(x, y, w, h);
+    }
+  }
+
+  async function drawPic(node){
+    const spPr = node.getElementsByTagName('p:spPr')[0];
+    const xfrm = spPr ? spPr.getElementsByTagName('a:xfrm')[0] : null;
+    const off = xfrm ? xfrm.getElementsByTagName('a:off')[0] : null;
+    const ext = xfrm ? xfrm.getElementsByTagName('a:ext')[0] : null;
+    if(!off || !ext) return;
+    const x = parseInt(off.getAttribute('x'),10) * scale, y = parseInt(off.getAttribute('y'),10) * scale;
+    const w = parseInt(ext.getAttribute('cx'),10) * scale, h = parseInt(ext.getAttribute('cy'),10) * scale;
+    const blip = node.getElementsByTagName('a:blip')[0];
+    const embedId = blip ? blip.getAttribute('r:embed') : null;
+    if(!embedId) return;
+    const target = resolveEmbedTarget(embedId);
+    if(!target) return;
+    const img = await loadImageFromZipEntry(zip, target);
+    if(img) ctx.drawImage(img, x, y, w, h);
+  }
+
+  async function drawShape(node){
+    const spPr = node.getElementsByTagName('p:spPr')[0];
+    const xfrm = spPr ? spPr.getElementsByTagName('a:xfrm')[0] : null;
+    const off = xfrm ? xfrm.getElementsByTagName('a:off')[0] : null;
+    const ext = xfrm ? xfrm.getElementsByTagName('a:ext')[0] : null;
+    if(!off || !ext) return;
+    const x = parseInt(off.getAttribute('x'),10) * scale, y = parseInt(off.getAttribute('y'),10) * scale;
+    const w = parseInt(ext.getAttribute('cx'),10) * scale, h = parseInt(ext.getAttribute('cy'),10) * scale;
+
+    const prstGeom = spPr.getElementsByTagName('a:prstGeom')[0];
+    const prst = prstGeom ? prstGeom.getAttribute('prst') : 'rect';
+
+    const fillCol = colorFromContainer(spPr, theme);
+    if(fillCol){
+      ctx.fillStyle = '#'+fillCol;
+      drawGeomPath(prst, x, y, w, h);
+      ctx.fill();
+    }
+    const ln = spPr.getElementsByTagName('a:ln')[0];
+    if(ln){
+      const lnCol = colorFromContainer(ln, theme);
+      if(lnCol){
+        const wAttr = ln.getAttribute('w');
+        ctx.strokeStyle = '#'+lnCol;
+        ctx.lineWidth = wAttr ? Math.max(1, parseInt(wAttr,10) * scale / 12700) : 1;
+        drawGeomPath(prst, x, y, w, h);
+        ctx.stroke();
+      }
+    }
+
+    const txBody = node.getElementsByTagName('p:txBody')[0];
+    if(txBody){
+      const paras = txBody.getElementsByTagName('a:p');
+      const lines = [];
+      for(let i=0;i<paras.length;i++){
+        const runs = paras[i].getElementsByTagName('a:r');
+        let text = '', sz = 18, bold = false, color = null;
+        for(let j=0;j<runs.length;j++){
+          const t = runs[j].getElementsByTagName('a:t')[0];
+          if(t) text += t.textContent;
+          const rPr = runs[j].getElementsByTagName('a:rPr')[0];
+          if(rPr){
+            if(rPr.getAttribute('sz')) sz = parseInt(rPr.getAttribute('sz'),10)/100;
+            if(rPr.getAttribute('b') === '1') bold = true;
+            const c = colorFromContainer(rPr, theme);
+            if(c) color = c;
+          }
+        }
+        if(text.trim()) lines.push({text, sz, bold, color});
+      }
+      if(lines.length){
+        const lineH = lines[0].sz * scale * 1.25;
+        let ty = y + h/2 - (lines.length * lineH)/2;
+        lines.forEach(ln2=>{
+          const fpx = Math.max(8, ln2.sz * scale * 1.1);
+          ctx.font = (ln2.bold ? 'bold ' : '') + fpx + 'px "Hind Siliguri", Arial, sans-serif';
+          ctx.fillStyle = ln2.color ? '#'+ln2.color : '#FFFFFF';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(ln2.text, x + w/2, ty + lineH/2);
+          ty += lineH;
+        });
+      }
+    }
+  }
+
+  // background
+  let bgDrawn = false;
+  const bg = slideDoc.getElementsByTagName('p:bg')[0];
+  if(bg){
+    const bgPr = bg.getElementsByTagName('p:bgPr')[0];
+    if(bgPr){
+      const blipFill = bgPr.getElementsByTagName('a:blipFill')[0];
+      if(blipFill){
+        const blip = blipFill.getElementsByTagName('a:blip')[0];
+        const embedId = blip ? blip.getAttribute('r:embed') : null;
+        const target = embedId ? resolveEmbedTarget(embedId) : null;
+        if(target){
+          const img = await loadImageFromZipEntry(zip, target);
+          if(img){ ctx.drawImage(img, 0, 0, targetW, targetH); bgDrawn = true; }
+        }
+      } else {
+        const col = colorFromContainer(bgPr, theme);
+        if(col){ ctx.fillStyle = '#'+col; ctx.fillRect(0,0,targetW,targetH); bgDrawn = true; }
+      }
+    }
+  }
+  if(!bgDrawn){ ctx.fillStyle = '#000000'; ctx.fillRect(0,0,targetW,targetH); }
+
+  // shapes + pictures, in document order
+  const spTree = slideDoc.getElementsByTagName('p:spTree')[0];
+  if(spTree){
+    const children = Array.from(spTree.childNodes).filter(n=>n.nodeType===1);
+    for(const node of children){
+      if(node.tagName === 'p:pic') await drawPic(node);
+      else if(node.tagName === 'p:sp') await drawShape(node);
+    }
+  }
+
+  return canvas.toDataURL('image/png');
+}
+
+bgTemplateInput.addEventListener('change', async e=>{
+  const f = e.target.files[0];
+  if(!f){ bgTemplateBase64 = null; tplHeaderToggleWrap.classList.add('hidden'); return; }
+  bgTemplateNameShow.textContent = f.name + ' — প্রসেস হচ্ছে...';
+
+  try{
+    if(f.name.toLowerCase().endsWith('.pptx')){
+      const rendered = await renderPptxSlideToImage(f);
+      if(rendered){
+        bgTemplateBase64 = rendered;
+        bgTemplateNameShow.textContent = f.name + ' — স্লাইডের পুরো ডিজাইন (ব্যাকগ্রাউন্ড, শেপ, লেখা, ছবি) হুবহু রিবিল্ড হয়েছে ✓';
+        tplHeaderToggleWrap.classList.remove('hidden');
+      } else {
+        bgTemplateBase64 = null;
+        bgTemplateNameShow.textContent = f.name + ' — এই pptx এর প্রথম স্লাইড পড়া গেল না। দয়া করে স্লাইডটা PNG/JPG এক্সপোর্ট করে দিন।';
+        tplHeaderToggleWrap.classList.add('hidden');
+      }
+    } else {
+      const reader = new FileReader();
+      reader.onload = ev=>{
+        bgTemplateBase64 = ev.target.result;
+        bgTemplateNameShow.textContent = f.name;
+        tplHeaderToggleWrap.classList.remove('hidden');
+      };
+      reader.readAsDataURL(f);
+    }
+  } catch(err){
+    bgTemplateBase64 = null;
+    bgTemplateNameShow.textContent = 'ত্রুটি হয়েছে: ' + err.message;
+    tplHeaderToggleWrap.classList.add('hidden');
+  }
+});
+
+function labelForStyle(style, i){
+  switch(style){
+    case 'bn_bracket': return bnOptionLabels[i] + ')';
+    case 'bn_paren': return '(' + bnOptionLabels[i] + ')';
+    case 'bn_num': return toBnNumber(i+1) + ')';
+    case 'en_bracket': return enOptionLabels[i] + ')';
+    case 'en_paren': return '(' + enOptionLabels[i] + ')';
+    case 'en_lower': return enOptionLabels[i].toLowerCase() + ')';
+    case 'num_bracket': return (i+1) + ')';
+    default: return (bnOptionLabels[i] || String(i+1)) + ')';
+  }
+}
+function fontForText(text, bnFont, enFont){
+  return isBengaliText(text) ? bnFont : enFont;
+}
+// "i ও ii", "i, ii ও iii" ধরনের অপশন হলে এটাকে বহুপদি (statement-based) MCQ ধরা হচ্ছে —
+// এই ধরনের প্রশ্নে অপশনগুলো এক লাইনে দুইটা করে (ক-খ এক লাইনে, গ-ঘ পরের লাইনে) বসবে
+function isStatementMcq(q){
+  if(q.type !== 'mcq' || !q.options || q.options.length < 2) return false;
+  const re = /^(?:[ivx]+\s*(?:[,।]|ও|এবং)?\s*)+$/i;
+  return q.options.every(o => re.test(o.trim()) && /[ivx]/i.test(o));
+}
+// আসল ফন্ট দিয়ে ক্যানভাসে টেক্সট মেপে লাইন সংখ্যা বের করা হচ্ছে (আগে ক্যারেক্টার গুনে গড় হিসাব করা হতো,
+// যেটা বাংলা যুক্তাক্ষর/মাত্রার কারণে কখনো বেশি কখনো কম হয়ে যাচ্ছিল) — শব্দ অনুযায়ী wrap করে প্রকৃত
+// পিক্সেল প্রস্থ মেপে হিসাব করায় এটা আসল PowerPoint word-wrap এর অনেক কাছাকাছি থাকে
+let __wrapCanvasCtx = null;
+function getWrapCtx(){
+  if(!__wrapCanvasCtx){ __wrapCanvasCtx = document.createElement('canvas').getContext('2d'); }
+  return __wrapCanvasCtx;
+}
+function countWrappedLines(text, fontSizePt, widthIn, fontFamily){
+  const ctx = getWrapCtx();
+  ctx.font = Math.max(1, Math.round(fontSizePt)) + 'pt "' + (fontFamily || 'sans-serif') + '", sans-serif';
+  // সামান্য সেফটি মার্জিন রাখা হচ্ছে যাতে ফন্ট মেট্রিক সামান্য ভিন্ন হলেও লেখা বক্সের বাইরে গিয়ে অপশনের ওপর না পড়ে
+  const maxWidthPx = Math.max(0.3, widthIn) * 96 * 0.94;
+  const paragraphs = String(text || '').split('\n');
+  let totalLines = 0;
+  paragraphs.forEach(para=>{
+    if(para === ''){ totalLines += 1; return; }
+    const words = para.split(' ');
+    let line = '';
+    let lines = 0;
+    words.forEach(word=>{
+      const test = line ? (line + ' ' + word) : word;
+      if(line && ctx.measureText(test).width > maxWidthPx){
+        lines++;
+        line = word;
+      } else {
+        line = test;
+      }
+    });
+    lines++;
+    totalLines += lines;
+  });
+  return Math.max(1, totalLines);
+}
+function estimateTextBoxHeight(text, fontSizePt, widthIn, opts){
+  opts = opts || {};
+  const lineSpacingFactor = opts.lineSpacingFactor || 1.18;
+  const lineHeightIn = (fontSizePt * lineSpacingFactor) / 72;
+  const wrappedLines = countWrappedLines(text, fontSizePt, widthIn, opts.fontFamily);
+  return wrappedLines * lineHeightIn;
+}
+
+document.getElementById('generateBtn').addEventListener('click', ()=>{
+  const subjectText = document.getElementById('subjectText').value.trim() || 'বিষয়';
+  const chapterText = document.getElementById('chapterText').value.trim() || 'অধ্যায়';
+  const badgeText = document.getElementById('badgeText').value.trim() || 'ONESHOT CLASS';
+  const footerLabel = document.getElementById('footerText').value.trim();
+  const footerLink = document.getElementById('footerLink').value.trim() || 'https://facebook.com';
+  const qColor = document.getElementById('qColor').value.replace('#','').toUpperCase();
+  const optColor = document.getElementById('optColor').value.replace('#','').toUpperCase();
+  const bnStyle = document.getElementById('bnLabelStyle').value;
+  const enStyle = document.getElementById('enLabelStyle').value;
+  const bnFont = document.getElementById('bnFont').value.trim() || 'Kalpurush';
+  const enFont = document.getElementById('enFont').value.trim() || 'Arial';
+  const headerHInput = document.getElementById('headerH');
+  const headerH = headerHInput ? (parseFloat(headerHInput.value) || 0.9) : 0.9;
+  const subjectFontSize = parseInt(document.getElementById('subjectFontSize').value, 10) || 13;
+  const chapterFontSize = parseInt(document.getElementById('chapterFontSize').value, 10) || 20;
+  const badgeFontSize = parseInt(document.getElementById('badgeFontSize').value, 10) || 14;
+  const subjectAlign = document.getElementById('subjectAlign').value || 'left';
+  const chapterAlign = document.getElementById('chapterAlign').value || 'center';
+  const badgeAlign = document.getElementById('badgeAlign').value || 'right';
+  const subjectBold = document.getElementById('subjectBold').checked;
+  const chapterBold = document.getElementById('chapterBold').checked;
+  const badgeBold = document.getElementById('badgeBold').checked;
+  const qFontSize = parseInt(document.getElementById('qFontSize').value, 10) || 20;
+  const optFontSize = parseInt(document.getElementById('optFontSize').value, 10) || 18;
+  // লাইন স্পেসিং ও বক্সের ভেতরের/মাঝের ফাঁকা জায়গা — এখন ইউজার নিজেই কমিয়ে-বাড়িয়ে ঠিক করতে পারবে
+  const qLineSpacingEl = document.getElementById('qLineSpacing');
+  const qLineSpacing = qLineSpacingEl ? (parseFloat(qLineSpacingEl.value) || 1.5) : 1.5;
+  const optLineSpacingEl = document.getElementById('optLineSpacing');
+  const optLineSpacing = optLineSpacingEl ? (parseFloat(optLineSpacingEl.value) || 1.5) : 1.5;
+  const qBoxMarginTBEl = document.getElementById('qBoxMarginTB');
+  const qBoxMarginTB = qBoxMarginTBEl ? (parseFloat(qBoxMarginTBEl.value) || 0) : 0.02;
+  const optBoxMarginTBEl = document.getElementById('optBoxMarginTB');
+  const optBoxMarginTB = optBoxMarginTBEl ? (parseFloat(optBoxMarginTBEl.value) || 0) : 0.02;
+  const qOptGapEl = document.getElementById('qOptGap');
+  const qOptGap = qOptGapEl ? (parseFloat(qOptGapEl.value) || 0) : 0.08;
+  // pptxgenjs-এর margin অপশন পয়েন্টে হিসাব হয় (১ ইঞ্চি = ৭২ পয়েন্ট); left/right আগের মতোই সামান্য (৭pt) রাখা হচ্ছে
+  const qBoxMargin = [Math.round(qBoxMarginTB * 72), 7, Math.round(qBoxMarginTB * 72), 7];
+  const optBoxMargin = [Math.round(optBoxMarginTB * 72), 7, Math.round(optBoxMarginTB * 72), 7];
+  const ansShapeColor = document.getElementById('ansShapeColor').value.replace('#','').toUpperCase();
+  const ansShapeW = parseFloat(document.getElementById('ansShapeW').value) || 1.8;
+  const ansShapeH = parseFloat(document.getElementById('ansShapeH').value) || 0.42;
+  const ansShapeXField = parseFloat(document.getElementById('ansShapeX').value);
+  const ansShapeYField = parseFloat(document.getElementById('ansShapeY').value);
+  const ansFontSize = parseInt(document.getElementById('ansFontSize').value, 10) || 14;
+  const contentX = parseFloat(document.getElementById('contentX').value);
+  const contentY = parseFloat(document.getElementById('contentY').value);
+  const contentW = parseFloat(document.getElementById('contentW').value);
+  const optXField = parseFloat(document.getElementById('optX').value);
+  const optYField = parseFloat(document.getElementById('optY').value);
+  const optWField = parseFloat(document.getElementById('optW').value);
+  const useTemplate = !!bgTemplateBase64;
+  const tplHasHeader = document.getElementById('tplHasHeader').checked;
+
+  const ORANGE = 'E8720C';
+  const YELLOW = 'F5E642';
+
+  let pptx = new PptxGenJS();
+  pptx.defineLayout({ name: 'WIDE', width: 13.333, height: 7.5 });
+  pptx.layout = 'WIDE';
+
+  let qNumCounter = 0;
+  parsedQuestions.forEach((q, i)=>{
+    const slide = pptx.addSlide();
+
+    if(useTemplate){
+      slide.background = { data: bgTemplateBase64 };
+    } else {
+      slide.background = { color: '000000' };
+    }
+
+    // টেমপ্লেট ছবিতে হেডার টেক্সট আগে থেকেই বসানো থাকলে, একদমই নতুন করে বসাব না
+    const skipHeaderText = useTemplate && tplHasHeader;
+    // নিজের বার তখনই আঁকব যখন কোনো টেমপ্লেট ছবি ব্যবহার হচ্ছে না —
+    // টেমপ্লেট ছবি থাকলে সেটার নিজের বর্ডার/ডিজাইন থাকবে, আমরা শুধু লেখাটা তার মাঝ বরাবর বসাব
+    const drawHeaderBar = !useTemplate;
+
+    // একাধিক অধ্যায় শনাক্ত হয়ে থাকলে প্রতিটা স্লাইড তার নিজের প্রশ্নের অধ্যায়ের নাম দেখাবে;
+    // একটাই অধ্যায় (বা কোনো অধ্যায় হেডিং না পেলে) সেটিংসের বক্সে যা লেখা আছে সেটাই সব স্লাইডে বসবে —
+    // এতে ইউজার চাইলে ম্যানুয়ালি বক্সটা এডিট করেও কন্ট্রোল রাখতে পারবে
+    const slideChapterText = (parsedHasMultipleChapters && q.chapter) ? q.chapter : chapterText;
+
+    if(!skipHeaderText){
+      if(drawHeaderBar){
+        slide.addShape('rect', { x:0, y:0, w:13.333, h:headerH, fill:{color:ORANGE}, line:{type:'none'} });
+      }
+      const barTextColor = drawHeaderBar ? 'FFFFFF' : qColor;
+      const chapterTextColor = YELLOW;
+
+      slide.addText(subjectText, { x:0.3, y:0, w:3.6, h:headerH, align:subjectAlign, valign:'middle', color:barTextColor, bold:subjectBold, fontSize:subjectFontSize, fontFace:fontForText(subjectText,bnFont,enFont) });
+      slide.addText(slideChapterText, { x:3.95, y:0, w:5.45, h:headerH, align:chapterAlign, valign:'middle', color:chapterTextColor, bold:chapterBold, fontSize:chapterFontSize, fontFace:fontForText(slideChapterText,bnFont,enFont) });
+      slide.addText(badgeText, { x:9.45, y:0, w:3.6, h:headerH, align:badgeAlign, valign:'middle', color:barTextColor, bold:badgeBold, fontSize:badgeFontSize, fontFace:fontForText(badgeText,bnFont,enFont) });
+    }
+
+    // প্রশ্ন/অনুচ্ছেদ টেক্সট বক্স এখন সেটিংস থেকে দেওয়া অবস্থান থেকে শুরু হবে
+    const cX = isNaN(contentX) ? 2.3 : contentX;
+    const cY = isNaN(contentY) ? 1.15 : contentY;
+    const cW = isNaN(contentW) ? 10.3 : contentW;
+    const oX = isNaN(optXField) ? 6.4 : optXField;
+    const oW = isNaN(optWField) ? 6.4 : optWField;
+
+    if(q.type === 'passage'){
+      // অনুচ্ছেদ/উদ্দীপক স্লাইড — একটাই টেক্সট বক্সে নির্দেশনা লাইন + মূল লেখা, কোনো অপশন/উত্তর নেই
+      const passageRuns = [
+        { text: '❑ ' + q.text, options:{ breakLine:true, bold:true } },
+        { text: ' ', options:{ breakLine:true } },
+        { text: q.body || '', options:{ breakLine:false } }
+      ];
+      slide.addText(passageRuns, {
+        x:cX, y:cY, w:13.333 - cX - 0.35, h:5.2,
+        align:'left', valign:'top', color:qColor,
+        fontSize:qFontSize, fontFace:fontForText(q.text + ' ' + (q.body||''), bnFont, enFont),
+        lineSpacing: Math.round(qFontSize * qLineSpacing),
+        margin: qBoxMargin
+      });
+    } else {
+      // question number + text — প্যাসেজ/উদ্দীপক স্লাইডগুলো এখানে গোনায় ধরা হচ্ছে না,
+      // তাই প্যাসেজের পরের প্রশ্নের সিরিয়াল এক লাফে বেড়ে যাবে না
+      qNumCounter++;
+      // ওয়ার্ড ফাইলে অধ্যায়ভিত্তিক যে নাম্বার দেওয়া আছে সেটাই ব্যবহার হবে; না থাকলে তখন গুনে নাম্বার বসবে
+      const qDisplayNum = q.origNum ? toBnNumber(q.origNum) : toBnNumber(qNumCounter);
+      const qLabel = qDisplayNum + '. ' + q.text;
+
+      // প্রশ্নটা কত লাইনে র‍্যাপ করবে তার হিসাব করে বক্সের উচ্চতা ঠিক করা হচ্ছে,
+      // যাতে লম্বা প্রশ্নে অপশন বক্সের লেখার ওপর এসে না পড়ে — আর ছোট প্রশ্নে বক্সটা যাতে
+      // টেক্সট এর সাইজের কাছাকাছি থাকে, নিচে অনেকটা খালি জায়গা না থেকে যায়
+      const estQHeight = estimateTextBoxHeight(qLabel, qFontSize, cW, { lineSpacingFactor: qLineSpacing, fontFamily: fontForText(q.text,bnFont,enFont) });
+      const qBoxH = Math.max(0.32, estQHeight + 0.03);
+      slide.addText(qLabel, { x:cX, y:cY, w:cW, h:qBoxH, align:'left', valign:'top', color:qColor, bold:true, fontSize:qFontSize, fontFace:fontForText(q.text,bnFont,enFont), lineSpacing: Math.round(qFontSize * qLineSpacing), margin: qBoxMargin });
+
+      // অপশন বক্স এখন সবসময় প্রশ্নের বক্স যেখানে শেষ হচ্ছে ঠিক তার নিচ থেকেই শুরু হবে —
+      // প্রশ্ন ছোট হলে অপশন ওপরে উঠে আসবে, প্রশ্ন বড় হলে অপশন নিচে নেমে যাবে
+      const oY = cY + qBoxH + qOptGap;
+
+      // উত্তরের ব্যাজ এখন সরাসরি সেটিংসের X/Y থেকে বসবে (আগে সবসময় ডান-নিচ কোণে ফিক্সড ছিল)
+      const ansX = isNaN(ansShapeXField) ? (11.5 - ansShapeW) : ansShapeXField;
+      const ansY = isNaN(ansShapeYField) ? (6.1 - ansShapeH) : ansShapeYField;
+
+      if(q.type === 'mcq' && q.options.length > 0){
+        const isBn = isBengaliText(q.text) || q.options.some(o=>isBengaliText(o));
+        const style = isBn ? bnStyle : enStyle;
+        const correctIdx = resolveCorrectIndex(q);
+        const showAnswer = correctIdx !== -1;
+        const optFont = isBn ? bnFont : enFont;
+
+        // সবগুলো অপশন একটাই টেক্সট বক্সে — আলাদা আলাদা বক্স/বর্ডার নেই।
+        // বহুপদি (i/ii/iii) প্রশ্ন হলে প্রথমে স্টেটমেন্টগুলো + "নিচের কোনটি সঠিক?" লাইন বসবে,
+        // তারপর ক/খ/গ/ঘ অপশনগুলো এক লাইনে দুইটা করে (ক-খ, গ-ঘ) — সবটাই এই একই বক্সে
+        const statementStyle = isStatementMcq(q);
+        let optionRuns = [];
+        let optionLineCount = 0;
+
+        if(q.statements && q.statements.length){
+          q.statements.forEach(st=>{
+            const stText = st.label + '. ' + st.text;
+            optionRuns.push({ text: stText, options: { breakLine: true } });
+            optionLineCount += countWrappedLines(stText, optFontSize, oW, optFont);
+          });
+          const promptText = (q.statementPrompt || 'নিচের কোনটি সঠিক?');
+          optionRuns.push({ text: promptText, options: { breakLine: true, bold: true } });
+          optionLineCount += countWrappedLines(promptText, optFontSize, oW, optFont);
+        }
+
+        if(statementStyle){
+          for(let oi=0; oi<q.options.length; oi+=2){
+            const leftText = labelForStyle(style, oi) + ' ' + q.options[oi];
+            if(oi+1 < q.options.length){
+              const rightText = labelForStyle(style, oi+1) + ' ' + q.options[oi+1];
+              optionRuns.push({ text: leftText + '\t' + rightText, options: { breakLine: true } });
+              optionLineCount += Math.max(countWrappedLines(leftText, optFontSize, oW/2, optFont), countWrappedLines(rightText, optFontSize, oW/2, optFont));
+            } else {
+              optionRuns.push({ text: leftText, options: { breakLine: true } });
+              optionLineCount += countWrappedLines(leftText, optFontSize, oW/2, optFont);
+            }
+          }
+        } else {
+          q.options.forEach((opt, oi)=>{
+            const optText = labelForStyle(style, oi) + ' ' + opt;
+            optionRuns.push({ text: optText, options: { breakLine: true } });
+            optionLineCount += countWrappedLines(optText, optFontSize, oW, optFont);
+          });
+        }
+        // লাইনের আসল উচ্চতা (ইঞ্চিতে) লাইন-স্পেসিং সেটিংস অনুযায়ী হিসাব করে বক্সের height ঠিক করা হচ্ছে,
+        // যাতে অহেতুক বাড়তি খালি জায়গা না থেকে যায়
+        const optLineHeightIn = (optFontSize * optLineSpacing) / 72;
+        slide.addText(optionRuns, {
+          x:oX, y:oY, w:oW, h: optionLineCount * optLineHeightIn + 0.2,
+          align:'left', valign:'top',
+          color:optColor, fontSize:optFontSize, fontFace:optFont,
+          lineSpacing: Math.round(optFontSize * optLineSpacing),
+          margin: optBoxMargin,
+          tabStops: statementStyle ? [{ position: oW/2 }] : undefined
+        });
+
+        // উত্তরটা আলাদা একটা ব্যাজ শেপে দেখাবে
+        if(showAnswer){
+          const ansLabel = labelForStyle(style, correctIdx).replace(')','');
+          slide.addShape('parallelogram', { x:ansX, y:ansY, w:ansShapeW, h:ansShapeH, fill:{color:ansShapeColor}, line:{type:'none'} });
+          slide.addText('উত্তর: ' + ansLabel, { x:ansX, y:ansY, w:ansShapeW, h:ansShapeH, align:'center', valign:'middle', color:'FFFFFF', bold:true, fontSize:ansFontSize, fontFace:bnFont });
+        }
+      } else if(q.answerRaw){
+        slide.addShape('parallelogram', { x:ansX, y:ansY, w:ansShapeW, h:ansShapeH, fill:{color:ansShapeColor}, line:{type:'none'} });
+        slide.addText('উত্তর: ' + q.answerRaw, { x:ansX, y:ansY, w:ansShapeW, h:ansShapeH, align:'center', valign:'middle', color:'FFFFFF', bold:true, fontSize:ansFontSize, fontFace:bnFont });
+      }
+    }
+
+    // ফুটার টেক্সট (লিংকসহ) — টেমপ্লেটে হেডার বেক-ইন থাকলেও ফুটার দরকার হলে দেখাবে
+    if(!skipHeaderText && footerLabel){
+      const parts = footerLabel.split(/(Click Here)/i);
+      const textRuns = parts.filter(p=>p.length>0).map(p=>{
+        if(/^click here$/i.test(p)){
+          return { text:p, options:{ hyperlink:{ url:footerLink }, color:'6EB6FF', underline:true, bold:true } };
+        }
+        return { text:p, options:{ color:'FFFFFF', bold:true } };
+      });
+      slide.addText(textRuns, { x:0, y:7.12, w:11.5, h:0.35, align:'center', valign:'middle', fontSize:12, fontFace:fontForText(footerLabel,bnFont,enFont) });
+    }
+
+    // লোগো — শুধু আপলোড করা থাকলেই বসবে, কোনো ডিফল্ট/ফলব্যাক লোগো নেই
+    if(logoBase64){
+      slide.addImage({ data:logoBase64, x:11.7, y:6.65, w:1.4, h:0.7, sizing:{ type:'contain', w:1.4, h:0.7 } });
+    }
+  });
+
+  const ansAnimation = document.getElementById('ansAnimation').value || 'none';
+  const exportFileName = 'Quiz-Slides.pptx';
+
+  if(ansAnimation === 'none'){
+    pptx.writeFile({ fileName: exportFileName }).then(()=>{
+      showToast('ডাউনলোড শুরু হয়েছে ✓');
+    });
+  } else {
+    // অ্যানিমেশন সিলেক্ট করা থাকলে আগে pptx-টা মেমরিতে বানিয়ে নিচ্ছি,
+    // তারপর উত্তরের ব্যাজ/টেক্সটে ক্লিক-এ-দেখানোর অ্যানিমেশন বসিয়ে ডাউনলোড দিচ্ছি
+    pptx.write({ outputType: 'arraybuffer' }).then(async (buf)=>{
+      try{
+        const animatedBuf = await addAnswerAnimations(buf, ansAnimation);
+        downloadArrayBuffer(animatedBuf, exportFileName);
+        showToast('ডাউনলোড শুরু হয়েছে ✓');
+      } catch(err){
+        console.error('অ্যানিমেশন বসাতে সমস্যা হয়েছে:', err);
+        // অ্যানিমেশন বসানো ব্যর্থ হলেও ফাইলটা যেন আটকে না যায়, অ্যানিমেশন ছাড়াই দিয়ে দিচ্ছি
+        downloadArrayBuffer(buf, exportFileName);
+        showToast('অ্যানিমেশন বসানো যায়নি, তাই সাধারণভাবে ডাউনলোড হয়েছে');
+      }
+    });
+  }
+});
+
+// ব্লবটা ডাউনলোড ট্রিগার করার ছোট্ট হেল্পার
+function downloadArrayBuffer(buf, filename){
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+// pptxgenjs নিজে থেকে PowerPoint অ্যানিমেশন বসাতে পারে না, তাই ফাইনাল .pptx (যেটা আসলে একটা ZIP)
+// JSZip দিয়ে খুলে, উত্তরের ব্যাজ আর টেক্সট শেপ খুঁজে বের করে, সরাসরি স্লাইড XML-এ
+// "ক্লিক করলে দেখাবে" ধরনের এন্ট্রি-অ্যানিমেশন বসিয়ে দিচ্ছি
+async function addAnswerAnimations(arrayBuffer, animType){
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const slidePaths = Object.keys(zip.files)
+    .filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f))
+    .sort((a,b)=>{
+      const na = parseInt(a.match(/slide(\d+)\.xml/)[1], 10);
+      const nb = parseInt(b.match(/slide(\d+)\.xml/)[1], 10);
+      return na - nb;
+    });
+
+  for(const path of slidePaths){
+    const xml = await zip.file(path).async('string');
+    const ids = findAnswerShapeIds(xml);
+    if(ids && (ids.shapeId || ids.textId)){
+      const newXml = injectAnswerTiming(xml, ids.shapeId, ids.textId, animType);
+      zip.file(path, newXml);
+    }
+  }
+  return await zip.generateAsync({ type: 'arraybuffer' });
+}
+
+// স্লাইডের XML থেকে "উত্তর" ব্যাজ (প্যারালালোগ্রাম শেপ) আর তার ওপরের টেক্সট বক্সের spid বের করা হচ্ছে
+function findAnswerShapeIds(xml){
+  const spBlocks = xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g);
+  if(!spBlocks) return null;
+  let shapeId = null, textId = null;
+  for(const block of spBlocks){
+    const idMatch = block.match(/<p:cNvPr id="(\d+)"/);
+    if(!idMatch) continue;
+    const id = idMatch[1];
+    if(!shapeId && /prst="parallelogram"/.test(block)) shapeId = id;
+    if(!textId && block.includes('উত্তর:')) textId = id;
+  }
+  if(!shapeId && !textId) return null;
+  return { shapeId, textId };
+}
+
+// একটা শেপের ভিজিবিলিটি "visible" করার সাধারণ বিহেভিয়ার — সব অ্যানিমেশনেই লাগবে
+function visibilitySetBlock(id, spid){
+  return '<p:set>' +
+      '<p:cBhvr>' +
+        '<p:cTn id="' + id + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>' +
+        '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+        '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst>' +
+      '</p:cBhvr>' +
+      '<p:to><p:strVal val="visible"/></p:to>' +
+    '</p:set>';
+}
+// PowerPoint-এর transition-filter ভিত্তিক এন্ট্রি ইফেক্ট (fade, wipe, box, circle, diamond, plus, wheel, blinds, checkerboard)
+function transitionFilterBlock(id, spid, filterVal){
+  return '<p:animEffect transition="in" filter="' + filterVal + '">' +
+      '<p:cBhvr>' +
+        '<p:cTn id="' + id + '" dur="500"/>' +
+        '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+      '</p:cBhvr>' +
+    '</p:animEffect>';
+}
+// Zoom In — শেপ ছোট থেকে বড় হয়ে আসে (animScale)
+function scaleZoomBlock(id, spid){
+  return '<p:animScale>' +
+      '<p:cBhvr>' +
+        '<p:cTn id="' + id + '" dur="500"/>' +
+        '<p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl>' +
+      '</p:cBhvr>' +
+      '<p:from x="0" y="0"/><p:to x="100000" y="100000"/>' +
+    '</p:animScale>';
+}
+
+// প্রতিটা অ্যানিমেশন টাইপের জন্য presetID (PowerPoint-এর গ্যালারি আইডেন্টিফায়ার হিসেবে, মূল
+// ভিজ্যুয়াল ইফেক্ট নিচের build() ফাংশনের বিহেভিয়ার এলিমেন্ট দিয়েই নির্ধারিত হয়) আর নিজস্ব বিল্ডার
+const ANIM_PRESETS = {
+  appear:     { id: 1,  build: null },
+  fade:       { id: 10, build: (id, spid) => transitionFilterBlock(id, spid, 'fade') },
+  zoom:       { id: 23, build: (id, spid) => scaleZoomBlock(id, spid) },
+  wipe_right: { id: 22, build: (id, spid) => transitionFilterBlock(id, spid, 'wipe(right)') },
+  wipe_left:  { id: 22, build: (id, spid) => transitionFilterBlock(id, spid, 'wipe(left)') },
+  wipe_up:    { id: 22, build: (id, spid) => transitionFilterBlock(id, spid, 'wipe(up)') },
+  wipe_down:  { id: 22, build: (id, spid) => transitionFilterBlock(id, spid, 'wipe(down)') },
+  box:        { id: 4,  build: (id, spid) => transitionFilterBlock(id, spid, 'box(in)') },
+  circle:     { id: 6,  build: (id, spid) => transitionFilterBlock(id, spid, 'circle(in)') },
+  diamond:    { id: 9,  build: (id, spid) => transitionFilterBlock(id, spid, 'diamond(in)') },
+  plus:       { id: 25, build: (id, spid) => transitionFilterBlock(id, spid, 'plus(in)') },
+  wheel:      { id: 24, build: (id, spid) => transitionFilterBlock(id, spid, 'wheel(1)') },
+  blinds:     { id: 3,  build: (id, spid) => transitionFilterBlock(id, spid, 'blinds(horizontal)') },
+  checker:    { id: 5,  build: (id, spid) => transitionFilterBlock(id, spid, 'checkerboard(across)') }
+};
+
+// একটা শেপের জন্য "ক্লিক করলে এন্ট্রি অ্যানিমেশন" ব্লক বানানো হচ্ছে
+function buildClickEffectPar(startId, spid, animType){
+  const preset = ANIM_PRESETS[animType] || ANIM_PRESETS.appear;
+  const setBlock = visibilitySetBlock(startId + 1, spid);
+  const effectBlock = preset.build ? preset.build(startId + 2, spid) : '';
+
+  return '<p:par>' +
+      '<p:cTn id="' + startId + '" presetID="' + preset.id + '" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect">' +
+        '<p:stCondLst><p:cond delay="0"/></p:stCondLst>' +
+        '<p:childTnLst>' + setBlock + effectBlock + '</p:childTnLst>' +
+      '</p:cTn>' +
+    '</p:par>';
+}
+
+// একটা স্লাইডের XML-এ p:timing ব্লক বসিয়ে দেওয়া হচ্ছে, যাতে টার্গেট শেপগুলো
+// স্লাইডে ক্লিক করলে (পরবর্তী ধাপে) অ্যানিমেশন সহকারে দেখা যায়
+function injectAnswerTiming(xml, shapeId, textId, animType){
+  const targets = [shapeId, textId].filter(Boolean);
+  if(targets.length === 0) return xml;
+
+  let idCounter = 10;
+  const pars = targets.map(spid=>{
+    const block = buildClickEffectPar(idCounter, spid, animType);
+    idCounter += 5;
+    return block;
+  }).join('');
+
+  const timingXml =
+    '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot">' +
+    '<p:childTnLst><p:seq concat="0" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq">' +
+    '<p:childTnLst><p:par><p:cTn id="3" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>' +
+    '<p:childTnLst><p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst>' +
+    '<p:childTnLst>' + pars + '</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn>' +
+    '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>' +
+    '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>' +
+    '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
+
+  if(xml.includes('</p:sld>')){
+    return xml.replace('</p:sld>', timingXml + '</p:sld>');
+  }
+  return xml;
+}
+
+// ============ আউটপুট মোড বাছাই (PPTX বনাম Google Form) — ফাইল আপলোডের আগেই বাছাই করা হয় ============
+function selectOutputMode(mode){
+  selectedMode = mode;
+  const pptxBtn = document.getElementById('modeChoosePptx');
+  const gformBtn = document.getElementById('modeChooseGform');
+  pptxBtn.classList.toggle('selected', mode === 'pptx');
+  gformBtn.classList.toggle('selected', mode === 'gform');
+  gformBtn.classList.toggle('gform-selected', mode === 'gform');
+  document.body.classList.toggle('theme-gform', mode === 'gform');
+
+  const uploadStep = document.getElementById('uploadStep');
+  const reviewStep = document.getElementById('reviewStep');
+  const alreadyUploaded = !reviewStep.classList.contains('hidden');
+
+  uploadStep.classList.remove('hidden');
+
+  if(alreadyUploaded){
+    // ফাইল আগে থেকেই আপলোড করা থাকলে (মোড পরে পাল্টানো হচ্ছে) — সাথে সাথে সঠিক সেটিংস প্যানেল দেখানো হচ্ছে
+    document.getElementById('gformOutputStep').classList.add('hidden');
+    if(mode === 'gform'){
+      document.getElementById('gformSettingsStep').classList.remove('hidden');
+      document.getElementById('settingsStep').classList.add('hidden');
+      document.getElementById('gformSettingsStep').scrollIntoView({behavior:'smooth', block:'start'});
+    } else {
+      document.getElementById('settingsStep').classList.remove('hidden');
+      document.getElementById('gformSettingsStep').classList.add('hidden');
+      document.getElementById('settingsStep').scrollIntoView({behavior:'smooth', block:'start'});
+    }
+  } else {
+    uploadStep.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+document.getElementById('modeChoosePptx').addEventListener('click', ()=>selectOutputMode('pptx'));
+document.getElementById('modeChooseGform').addEventListener('click', ()=>selectOutputMode('gform'));
+
+// ============ Google Form Apps Script জেনারেটর ============
+function escGs(s){
+  return (s||'').replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,'\\n');
+}
+
+function dedupeOptions(options){
+  // Google Forms এ একই প্রশ্নে দুটো অপশনের লেখা হুবহু এক হলে ফর্ম তৈরি হয় না।
+  // তাই ডুপ্লিকেট পাওয়া গেলে দেখতে অপরিবর্তিত রেখে (অদৃশ্য zero-width space যোগ করে) আলাদা করে দেওয়া হচ্ছে।
+  const seen = {};
+  return options.map(opt=>{
+    const key = opt.trim();
+    if(!(key in seen)){
+      seen[key] = 0;
+      return opt;
+    }
+    seen[key]++;
+    return opt + '\u200B'.repeat(seen[key]);
+  });
+}
+
+document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
+  const title = document.getElementById('formTitle').value.trim() || 'প্রশ্নাবলী';
+  const desc = document.getElementById('formDesc').value.trim();
+
+  let code = '';
+  code += '/**\n';
+  code += ' * এই কোডটি script.google.com এ পেস্ট করে Run করুন।\n';
+  code += ' * এটি স্বয়ংক্রিয়ভাবে একটি Google Form Quiz তৈরি করবে।\n';
+  code += ' */\n';
+  code += 'function createFormFromData() {\n';
+  code += '  var form = FormApp.create(' + JSON.stringify(title) + ');\n';
+  code += '  form.setIsQuiz(true);\n';
+  code += '  form.setCollectEmail(true);\n';
+  code += '  form.setLimitOneResponsePerUser(true);\n';
+  if(desc) code += '  form.setDescription(' + JSON.stringify(desc) + ');\n';
+  code += '  var item;\n\n';
+
+  code += '  // শিক্ষার্থীর তথ্য\n';
+  code += '  item = form.addTextItem();\n';
+  code += '  item.setTitle("Student Name:").setRequired(true);\n\n';
+  code += '  item = form.addTextItem();\n';
+  code += '  item.setTitle("Student Number:").setRequired(true);\n';
+  code += '  item.setValidation(FormApp.createTextValidation().setHelpText("অবশ্যই ১১ ডিজিটের সংখ্যা এবং ০১ দিয়ে শুরু হতে হবে").requireTextMatchesPattern("^01[0-9]{9}$").build());\n\n';
+  code += '  item = form.addTextItem();\n';
+  code += '  item.setTitle("Roll:").setRequired(false);\n\n';
+  code += '  form.addPageBreakItem().setTitle("Section 2 of 2");\n\n';
+
+  let qNumCounter = 0;
+  let lastChapter = null;
+  parsedQuestions.forEach((q)=>{
+    // এই টুলে অধ্যায়ের নাম প্রতিটা প্রশ্ন/অনুচ্ছেদের সাথেই (q.chapter) জোড়া থাকে —
+    // আগেরটার চেয়ে অধ্যায় পাল্টালে একটা নতুন Section Header বসিয়ে দিচ্ছি
+    if(q.chapter && q.chapter !== lastChapter){
+      code += '  // অধ্যায়/বিষয় শিরোনাম\n';
+      code += '  item = form.addSectionHeaderItem();\n';
+      code += '  item.setTitle("' + escGs(q.chapter) + '");\n\n';
+      lastChapter = q.chapter;
+    }
+
+    if(q.type === 'passage'){
+      // উদ্দীপক/অনুচ্ছেদ — SectionHeaderItem ব্যবহার করা হচ্ছে কারণ এটাতে setPoints/setRequired নেই,
+      // আগে addTextItem() দিয়ে setPoints(0) কল করাতে "Invalid data updating form" এরর হচ্ছিল
+      code += '  // উদ্দীপক/অনুচ্ছেদ\n';
+      code += '  item = form.addSectionHeaderItem();\n';
+      code += '  item.setTitle("' + escGs(q.text) + '")';
+      if(q.body) code += '.setHelpText("' + escGs(q.body) + '")';
+      code += ';\n\n';
+      return;
+    }
+
+    qNumCounter++;
+    const points = Number.isFinite(q.points) ? q.points : 1;
+    code += '  // প্রশ্ন ' + qNumCounter + '\n';
+    // মূল ফাইলে যে নাম্বার দেওয়া আছে সেটাই দেখানো হচ্ছে (অটো-কাউন্টার না) —
+    // যাতে উদ্দীপক/অনুচ্ছেদে উল্লেখিত নাম্বারের (যেমন "১ ও ২ নং প্রশ্নের উত্তর দাও") সাথে মিলে যায়
+    let qLabel = (q.origNum ? toBnNumber(q.origNum) : toBnNumber(qNumCounter)) + '. ' + q.text;
+    // বহুপদি (i/ii/iii স্টেটমেন্ট) প্রশ্ন হলে প্রতিটা স্টেটমেন্ট আর "নিচের কোনটি সঠিক?" লাইনটা
+    // প্রশ্নের টাইটেলেই সিরিয়ালি, নিজের নিজের লাইনে বসানো হচ্ছে
+    if(q.statements && q.statements.length){
+      q.statements.forEach(st => { qLabel += '\n' + st.label + '. ' + st.text; });
+      qLabel += '\n' + (q.statementPrompt || 'নিচের কোনটি সঠিক?');
+    }
+    if(q.type === 'mcq' && q.options.length > 0){
+      const correctIdx = resolveCorrectIndex(q);
+      const uniqueOpts = dedupeOptions(q.options);
+      const isBn = isBengaliText(q.text) || q.options.some(o=>isBengaliText(o));
+      const style = isBn ? 'bn_bracket' : 'en_bracket';
+      code += '  item = form.addMultipleChoiceItem();\n';
+      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(false).setChoices([\n';
+      uniqueOpts.forEach((opt, oi)=>{
+        const labeledOpt = labelForStyle(style, oi) + ' ' + opt;
+        code += '    item.createChoice("' + escGs(labeledOpt) + '", ' + (oi === correctIdx ? 'true' : 'false') + ')' + (oi < uniqueOpts.length-1 ? ',' : '') + '\n';
+      });
+      code += '  ]);\n\n';
+    } else {
+      code += '  item = form.addTextItem();\n';
+      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(true);\n';
+      if(q.answerRaw){
+        code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সঠিক উত্তর: ' + escGs(q.answerRaw) + '").build());\n\n';
+      } else {
+        code += '\n';
+      }
+    }
+  });
+
+  code += '  Logger.log("ফর্ম এডিট লিংক: " + form.getEditUrl());\n';
+  code += '  Logger.log("ফর্ম পাবলিশড লিংক: " + form.getPublishedUrl());\n';
+  code += '}\n';
+
+  document.getElementById('scriptOut').textContent = code;
+  document.getElementById('gformOutputStep').classList.remove('hidden');
+  document.getElementById('gformOutputStep').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+document.getElementById('gformCopyBtn').addEventListener('click', ()=>{
+  const text = document.getElementById('scriptOut').textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    showToast('কপি হয়েছে ✓');
+  });
+});
+
+document.getElementById('gformDownloadBtn').addEventListener('click', ()=>{
+  const text = document.getElementById('scriptOut').textContent;
+  const blob = new Blob([text], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'CreateForm.gs';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('কোড ফাইল ডাউনলোড হয়েছে ✓');
+});
+
+updatePreview();
+</script>
+</body>
+</html>
