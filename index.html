@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --board:#3a160c;
@@ -246,6 +248,28 @@
     color:var(--chalk);
   }
 
+  /* ========== লগইন গেট (Google Sign-In) ========== */
+  #authGate{
+    position:fixed; inset:0; z-index:5000;
+    background:var(--board);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  #authGate.hidden{ display:none !important; }
+  .auth-box{
+    max-width:420px; width:100%;
+    background:var(--board-2); border:1px solid var(--line-strong); border-radius:var(--radius);
+    padding:34px 26px; text-align:center;
+  }
+  .auth-box .auth-emoji{ font-size:34px; margin-bottom:10px; }
+  .auth-box h2{ margin:0 0 8px; font-size:19px; color:var(--chalk); }
+  .auth-box p{ color:var(--chalk-dim); font-size:14px; line-height:1.7; margin-bottom:22px; }
+  .auth-box button{ width:100%; }
+  .auth-box button.primary{ padding:12px 20px; font-size:15px; }
+  #authLoadingBox{ color:var(--chalk-dim); font-size:13.5px; }
+  #authDeniedBox{ margin-top:16px; }
+  #authDeniedBox .denied-msg{ color:var(--red); font-size:13.5px; margin-bottom:12px; line-height:1.7; }
+  #authDeniedEmail{ color:var(--chalk); font-weight:600; }
+
   /* ========== ছোট স্ক্রিন (মোবাইল) এর জন্য অ্যাডজাস্টমেন্ট ========== */
   @media (max-width: 640px){
     body{ padding:16px 10px 40px; }
@@ -269,7 +293,30 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- ===== লগইন গেট: শুধু অনুমোদিত Gmail দিয়ে সাইন-ইন করলেই নিচের টুলটা দেখা যাবে ===== -->
+<div id="authGate">
+  <div class="auth-box">
+    <div class="auth-emoji">🔒</div>
+    <h2>Word MCQ Studio</h2>
+
+    <div id="authLoadingBox">
+      <p>যাচাই করা হচ্ছে...</p>
+    </div>
+
+    <div id="authSignInBox" class="hidden">
+      <p>এই টুলটা ব্যবহার করতে Google দিয়ে সাইন-ইন করুন</p>
+      <button type="button" class="primary" id="googleSignInBtn">🔑 Google দিয়ে সাইন-ইন করুন</button>
+    </div>
+
+    <div id="authDeniedBox" class="hidden">
+      <div class="denied-msg">⛔ <span id="authDeniedEmail"></span> — এই ইমেইলটার অনুমতি নেই।<br>অন্য অনুমোদিত অ্যাকাউন্ট দিয়ে চেষ্টা করুন, অথবা এডমিনের সাথে যোগাযোগ করুন।</div>
+      <button type="button" id="signOutBtn">সাইন-আউট করুন / অন্য অ্যাকাউন্ট দিয়ে ঢুকুন</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" id="mainWrap" style="display:none;">
 
   <header>
     <span class="eyebrow">WORD → PPTX + GOOGLE FORM QUIZ</span>
@@ -795,6 +842,83 @@
 </div>
 
 <script>
+// ============ লগইন সিকিউরিটি (Google Sign-In + অনুমোদিত Gmail তালিকা) ============
+const firebaseConfig = {
+  apiKey: "AIzaSyC64mdTmL_64IsGzVM-0A-XJJGIL1sNYKU",
+  authDomain: "word-to-pptx-or--form.firebaseapp.com",
+  projectId: "word-to-pptx-or--form",
+  storageBucket: "word-to-pptx-or--form.firebasestorage.app",
+  messagingSenderId: "836573816280",
+  appId: "1:836573816280:web:6201e5db15b63c9eb2fead"
+};
+firebase.initializeApp(firebaseConfig);
+
+// ⬇️ এখানে যাদের এই টুল ব্যবহারের অনুমতি দিতে চান তাদের Gmail ঠিকানা লিখুন —
+// প্রতিটা ইমেইল ছোট হাতের অক্ষরে, কমা দিয়ে আলাদা করে দিন। নতুন যোগ করতে নতুন লাইনে লিখুন।
+const allowedEmails = [
+  "faisalkhanbusinessctg@gmail.com",
+  "faisalkhanctg1718@gmail.com",
+  "faisalkhangds@gmail.com",
+  "businesstitanofficial@gmail.com",
+  "btonlinebd@gmail.com",
+  // "another@gmail.com",
+];
+
+function normalizeEmail(email){ return (email || '').trim().toLowerCase(); }
+
+const authGateEl = document.getElementById('authGate');
+const authLoadingBoxEl = document.getElementById('authLoadingBox');
+const authSignInBoxEl = document.getElementById('authSignInBox');
+const authDeniedBoxEl = document.getElementById('authDeniedBox');
+const authDeniedEmailEl = document.getElementById('authDeniedEmail');
+const mainWrapEl = document.getElementById('mainWrap');
+
+function showAuthState(state, email){
+  authLoadingBoxEl.classList.add('hidden');
+  authSignInBoxEl.classList.add('hidden');
+  authDeniedBoxEl.classList.add('hidden');
+  authGateEl.classList.remove('hidden');
+  mainWrapEl.style.display = 'none';
+
+  if(state === 'loading'){
+    authLoadingBoxEl.classList.remove('hidden');
+  } else if(state === 'signin'){
+    authSignInBoxEl.classList.remove('hidden');
+  } else if(state === 'denied'){
+    authDeniedEmailEl.textContent = email || '';
+    authDeniedBoxEl.classList.remove('hidden');
+  } else if(state === 'allowed'){
+    authGateEl.classList.add('hidden');
+    mainWrapEl.style.display = 'block';
+  }
+}
+
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){
+    showAuthState('signin');
+    return;
+  }
+  const email = normalizeEmail(user.email);
+  const isAllowed = allowedEmails.map(normalizeEmail).includes(email);
+  if(isAllowed){
+    showAuthState('allowed');
+  } else {
+    showAuthState('denied', user.email);
+  }
+});
+
+document.getElementById('googleSignInBtn').addEventListener('click', function(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).catch(function(err){
+    alert('সাইন-ইন করা যায়নি: ' + err.message);
+  });
+});
+
+document.getElementById('signOutBtn').addEventListener('click', function(){
+  firebase.auth().signOut();
+});
+// ============ লগইন সিকিউরিটি শেষ ============
+
 let parsedQuestions = [];
 let selectedMode = null; // 'pptx' | 'gform'
 let parsedHasMultipleChapters = false;
