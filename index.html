@@ -9,8 +9,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --board:#3a160c;
@@ -155,6 +153,26 @@
     cursor:pointer;
   }
   .qnum{font-family:'JetBrains Mono',monospace;color:var(--yellow);font-weight:600;padding-top:12px;}
+  .row-actions{display:flex;flex-direction:column;gap:4px;align-items:center;padding-top:8px;}
+  .row-actions button{padding:3px 6px;font-size:12px;min-width:auto;background:transparent;border:1px solid var(--line-strong);color:var(--chalk-dim);}
+  .row-actions button:hover{color:var(--chalk);border-color:var(--yellow);}
+  .qSelect{margin-top:12px;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .modal-overlay.hidden{display:none;}
+  .modal-box{background:var(--board-2);border:1px solid var(--line-strong);border-radius:var(--radius);max-width:980px;width:100%;max-height:88vh;display:flex;flex-direction:column;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line);flex-shrink:0;}
+  .modal-header h3{margin:0;font-size:16px;color:var(--chalk);}
+  .modal-header button{background:transparent;border:1px solid var(--line-strong);color:var(--chalk-dim);font-size:16px;cursor:pointer;padding:2px 10px;border-radius:6px;}
+  .modal-header button:hover{color:var(--chalk);border-color:var(--yellow);}
+  .modal-body{padding:20px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;}
+  .mini-slide-wrap{display:flex;flex-direction:column;gap:6px;}
+  .mini-slide-label{font-size:12px;color:var(--chalk-dim);font-family:'JetBrains Mono',monospace;}
+  .preview-box.mini-slide{position:relative;top:0;z-index:auto;max-width:none;margin:0;cursor:pointer;transition:transform .15s, box-shadow .15s;}
+  .preview-box.mini-slide:hover{transform:scale(1.02);box-shadow:0 0 0 2px var(--yellow);}
+  .preview-box.mini-slide.big-slide{cursor:default;}
+  .preview-box.mini-slide.big-slide:hover{transform:none;box-shadow:0 8px 28px rgba(0,0,0,0.45);}
+  .modal-header button:disabled{opacity:0.4;cursor:not-allowed;}
+  .modal-header button:disabled:hover{color:var(--chalk-dim);border-color:var(--line-strong);}
   .warn-tag{display:inline-block;margin-top:5px;font-size:11.5px;color:var(--red);font-family:'JetBrains Mono',monospace;}
 
   .field{margin-bottom:14px;}
@@ -214,46 +232,6 @@
   .mode-btn-emoji{font-size:24px;}
   .mode-btn-title{font-size:15.5px; font-weight:700; color:var(--chalk);}
   .mode-btn-sub{font-size:12.5px; color:var(--chalk-dim); font-weight:500;}
-  /* ===== LOGIN GATE ===== */
-  #loginGate{
-    position:fixed; inset:0; z-index:999;
-    display:flex; align-items:center; justify-content:center;
-    background:var(--board);
-    padding:20px;
-  }
-  #loginGate.hidden{display:none !important;}
-  .login-card{
-    background:var(--board-2);
-    border:1px solid var(--line-strong);
-    border-radius:var(--radius);
-    padding:36px 28px;
-    max-width:380px;
-    width:100%;
-    text-align:center;
-  }
-  .login-card h2{font-size:19px;margin:0 0 8px;color:var(--chalk);}
-  .login-card p{font-size:13.5px;color:var(--chalk-dim);margin:0 0 22px;line-height:1.7;}
-  #googleSignInBtn{
-    display:inline-flex; align-items:center; justify-content:center; gap:10px;
-    width:100%; padding:12px 16px;
-    background:#fff; color:#3c4043; border:1px solid #dadce0; border-radius:8px;
-    font-family:'Hind Siliguri',sans-serif; font-weight:600; font-size:14.5px; cursor:pointer;
-  }
-  #googleSignInBtn:hover{box-shadow:0 1px 3px rgba(0,0,0,0.25);}
-  #loginError{
-    margin-top:16px; font-size:13px; color:var(--red);
-    display:none;
-  }
-  #loginError.show{display:block;}
-  #loginLoading{font-size:13px; color:var(--chalk-dim);}
-  .user-bar{
-    position:fixed; top:10px; right:10px; z-index:998;
-    display:flex; align-items:center; gap:10px;
-    background:var(--board-2); border:1px solid var(--line-strong); border-radius:999px;
-    padding:6px 14px 6px 6px; font-size:12.5px; color:var(--chalk-dim);
-  }
-  .user-bar img{width:26px;height:26px;border-radius:50%;}
-  .user-bar button{padding:5px 12px; font-size:12px; border-radius:999px;}
   pre#scriptOut{
     background:var(--board);
     border:1px solid var(--line-strong);
@@ -267,39 +245,48 @@
     max-height:480px;
     color:var(--chalk);
   }
+
+  /* ========== ছোট স্ক্রিন (মোবাইল) এর জন্য অ্যাডজাস্টমেন্ট ========== */
+  @media (max-width: 640px){
+    body{ padding:16px 10px 40px; }
+    .step{ padding:16px 14px; }
+    .mode-choice-row{ flex-direction:column; }
+    .mode-btn{ width:100%; }
+    .row{ gap:8px; }
+    .row button{ flex:1 1 auto; }
+    table{ font-size:12.5px; }
+    thead th{ font-size:10px; padding:6px 4px; }
+    tbody td{ padding:7px 4px; }
+    .row-actions{ flex-direction:row; }
+    .modal-overlay{ padding:8px; }
+    .modal-box{ max-height:94vh; }
+    .modal-header{ padding:10px 12px; flex-direction:column; align-items:flex-start; gap:8px; }
+    .modal-header h3{ font-size:13.5px; }
+    .modal-body{ padding:12px; grid-template-columns:1fr; gap:14px; }
+    #singleSlideBoxHolder{ max-width:100%; }
+    .field[style*="display:flex"]{ flex-direction:column; }
+  }
 </style>
 </head>
 <body>
-
-<!-- ===== LOGIN GATE (Google Sign-In + email whitelist) ===== -->
-<div id="loginGate">
-  <div class="login-card">
-    <h2>🔒 Sign in প্রয়োজন</h2>
-    <p>এই টুলটি ব্যবহার করতে অনুমোদিত Google একাউন্ট দিয়ে সাইন ইন করুন।</p>
-    <button type="button" id="googleSignInBtn">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 18.9 12 24 12c3.1 0 5.8 1.1 8 3l6-6C34.5 6 29.6 4 24 4c-7.5 0-14 4.2-17.7 10.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.6 35.4 27 36 24 36c-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.9 39.7 16.4 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.4C41.6 35.5 44 30.2 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
-      Sign in with Google
-    </button>
-    <div id="loginLoading" class="hidden">যাচাই করা হচ্ছে...</div>
-    <div id="loginError">এই email দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা <a href="https://t.me/faisal_gds" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:600;">টুলের মালিকের সাথে যোগাযোগ করুন</a>।</div>
-  </div>
-</div>
-
-<!-- ===== USER BAR (visible after successful login) ===== -->
-<div class="user-bar hidden" id="userBar">
-  <img id="userPhoto" src="" alt="">
-  <span id="userEmail"></span>
-  <button type="button" id="signOutBtn">Sign out</button>
-</div>
-
-<div class="wrap hidden" id="appContent">
+<div class="wrap">
 
   <header>
     <span class="eyebrow">WORD → PPTX + GOOGLE FORM QUIZ</span>
-    <h1>প্রশ্ন থেকে PowerPoint স্লাইড অথবা Google Form জেনারেটর</h1>
+    <h1>WORD থেকে PowerPoint স্লাইড অথবা Google Form জেনারেটর</h1>
     <p>Word (.docx) ফাইল দিন — প্রশ্নগুলো বিশ্লেষণ করে আপনি বেছে নিতে পারবেন এখান থেকে কাস্টম ডিজাইনের PPTX স্লাইড বানাবেন, নাকি Google Form Quiz বানানোর কোড জেনারেট করবেন — দুটোই একই জায়গা থেকে।</p>
     <p style="margin-top:16px;font-size:17px;color:var(--chalk-dim);">Developed by <a href="https://t.me/faisal_gds" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:700;text-decoration:none;font-size:19px;">Faisal Khan</a></p>
   </header>
+
+  <div class="step hidden" id="draftBanner" style="border-color:var(--yellow);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+      <div>📝 আগের একটা অসমাপ্ত কাজ পাওয়া গেছে — সেটা কি ফিরিয়ে আনতে চান?</div>
+      <div class="row" style="gap:8px;margin:0;">
+        <button type="button" class="primary" id="draftRestoreBtn">পুনরুদ্ধার করুন</button>
+        <button type="button" id="draftDismissBtn">না, নতুন করে শুরু করি</button>
+      </div>
+    </div>
+  </div>
 
   <!-- STEP 1: OUTPUT MODE CHOICE -->
   <div class="step" id="outputChoiceStep">
@@ -334,9 +321,10 @@
       </div>
     </div>
     <label class="drop" id="dropZone">
-      <input type="file" id="fileInput" accept=".docx">
+      <input type="file" id="fileInput" accept=".docx" multiple>
       <div class="drop-icon">📄</div>
       <div><b>ফাইল বেছে নিন</b> অথবা এখানে টেনে আনুন</div>
+      <div style="font-size:12px;color:var(--chalk-dim);margin-top:4px;">একসাথে একাধিক .docx ফাইলও দেওয়া যাবে — সবগুলোর প্রশ্ন একটাই তালিকায় জোড়া লাগবে</div>
       <div class="filename" id="fileNameShow"></div>
     </label>
     <div class="instructions">
@@ -361,14 +349,21 @@
         <div class="sub">লাল দাগ দেওয়া সারিগুলো একটু চেক করে নিন</div>
       </div>
     </div>
+    <div class="row" style="margin-bottom:10px;gap:8px;">
+      <input type="text" id="questionSearchInput" placeholder="🔍 প্রশ্ন/অপশন/উত্তর খুঁজুন..." style="flex:1;min-width:200px;">
+      <button type="button" id="addQuestionBtn">➕ নতুন প্রশ্ন যোগ করুন</button>
+      <button type="button" id="deleteSelectedBtn">🗑️ সিলেক্ট করা প্রশ্ন ডিলিট করুন</button>
+    </div>
     <div style="overflow-x:auto;">
       <table id="qTable">
         <thead>
           <tr>
+            <th style="width:24px;"><input type="checkbox" id="selectAllQ"></th>
             <th style="width:26px;">#</th>
             <th>প্রশ্ন</th>
             <th style="width:220px;">অপশন (এক লাইনে একটি)</th>
             <th style="width:110px;">সঠিক উত্তর</th>
+            <th style="width:70px;">অ্যাকশন</th>
           </tr>
         </thead>
         <tbody id="qTableBody"></tbody>
@@ -411,6 +406,26 @@
       <div class="pv-ans" id="pvAns">উত্তর: খ</div>
       <div class="pv-line"></div>
       <div class="pv-footer" id="pvFooter">Facebook Page – Click Here</div>
+    </div>
+    <div class="field">
+      <label>কালার থিম প্রিসেট</label>
+      <select id="themePreset">
+        <option value="orange">কমলা (ডিফল্ট)</option>
+        <option value="blue">নীল</option>
+        <option value="green">সবুজ</option>
+        <option value="purple">বেগুনি</option>
+        <option value="custom">কাস্টম (নিজে বাছাই করবো)</option>
+      </select>
+    </div>
+    <div class="field" style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label>উপরের বার/হেডারের রঙ</label>
+        <input type="color" id="topbarColor" value="#e8720c">
+      </div>
+      <div style="flex:1;">
+        <label>মাঝের চ্যাপ্টার টেক্সটের রঙ</label>
+        <input type="color" id="chapterAccentColor" value="#f5e642">
+      </div>
     </div>
     <div class="field">
       <label>বাম পাশের বিষয়ের নাম (উদাহরণ: হিসাববিজ্ঞান ১ম পত্র)</label>
@@ -656,16 +671,32 @@
       <input type="file" id="logoInput" accept="image/png,image/jpeg">
       <div class="filename" id="logoNameShow"></div>
     </div>
+    <div class="field" style="border:1px solid var(--line-strong);border-radius:8px;padding:12px;">
+      <label style="margin-bottom:2px;">💾 একাধিক প্রিসেট (নাম দিয়ে একাধিক ডিজাইন সেভ রাখুন)</label>
+      <div style="font-size:12px;color:var(--chalk-dim);margin-bottom:10px;">নতুন একটা ডিজাইন সেভ করতে নিচে নাম লিখে "সেভ করুন" চাপুন — পরে ড্রপডাউন থেকে সেটা লোড/ডিলিট করা যাবে</div>
+      <div class="row" style="gap:8px;">
+        <input type="text" id="presetNameInput" placeholder="নতুন প্রিসেটের নাম দিন (যেমন: হিসাববিজ্ঞান থিম)" style="flex:1;">
+        <button type="button" class="primary" id="presetSaveAsBtn">💾 নতুন প্রিসেট হিসেবে সেভ করুন</button>
+      </div>
+      <div style="height:1px;background:var(--line);margin:14px 0;"></div>
+      <div style="font-size:12px;color:var(--chalk-dim);margin-bottom:8px;">আগে সেভ করা প্রিসেট থেকে বাছাই করুন:</div>
+      <div class="row" style="gap:8px;">
+        <select id="presetSelect" style="flex:1;"><option value="">-- প্রিসেট বাছাই করুন --</option></select>
+        <button type="button" id="presetLoadBtn">♻️ লোড করুন</button>
+        <button type="button" id="presetDeleteBtn">🗑️ ডিলিট</button>
+      </div>
+    </div>
     <div class="row" style="margin-top:14px; gap:10px;">
-      <button type="button" id="saveSettingsBtn">💾 সেটিংস সেভ করুন</button>
-      <button type="button" id="loadSettingsBtn">♻️ সেভ করা সেটিংস লোড করুন</button>
+      <button type="button" id="saveSettingsBtn">💾 বর্তমান সেটিংস সেভ করুন</button>
+      <button type="button" id="loadSettingsBtn">♻️ সর্বশেষ সেভ করা সেটিংস লোড করুন</button>
     </div>
     <div class="row" style="margin-top:10px; gap:10px;">
       <button type="button" id="exportSettingsBtn">⬇️ সেটিংস ফাইল ডাউনলোড করুন</button>
       <button type="button" id="importSettingsBtn">⬆️ সেটিংস ফাইল ইম্পোর্ট করুন</button>
       <input type="file" id="importSettingsInput" accept=".json" style="display:none;">
     </div>
-    <div class="row" style="margin-top:18px;">
+    <div class="row" style="margin-top:18px; gap:10px;">
+      <button type="button" id="previewAllBtn">🖼️ সব স্লাইড প্রিভিউ দেখুন</button>
       <button class="primary" id="generateBtn">📥 PPTX ফাইল তৈরি ও ডাউনলোড করুন</button>
     </div>
   </div>
@@ -676,7 +707,7 @@
       <div class="badge">৪</div>
       <div>
         <h2>ফর্মের তথ্য দিন</h2>
-        <div class="sub">Quiz হিসেবে তৈরি হবে, প্রতিটি প্রশ্নের ডিফল্ট নম্বর ১</div>
+        <div class="sub">Quiz হিসেবে তৈরি হবে — নিচে পয়েন্ট ও শাফল কনফিগার করতে পারবেন</div>
       </div>
     </div>
     <div class="field">
@@ -686,6 +717,20 @@
     <div class="field">
       <label>বিবরণ (ঐচ্ছিক)</label>
       <textarea id="formDesc" placeholder="যেমন: প্রথম অধ্যায় — MCQ পরীক্ষা"></textarea>
+    </div>
+    <div class="field" style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label>প্রতি প্রশ্নের পয়েন্ট (নম্বর)</label>
+        <input type="number" id="gformPoints" value="1" min="0" step="0.5">
+      </div>
+      <div style="flex:1;display:flex;align-items:flex-end;">
+        <label style="display:flex;align-items:center;gap:6px;margin:0;">
+          <input type="checkbox" id="gformShuffle" style="width:auto;"> প্রশ্নের ক্রম এলোমেলো (Shuffle) করুন
+        </label>
+      </div>
+    </div>
+    <div class="field" id="gformSummaryBox" style="background:var(--board);border:1px solid var(--line-strong);border-radius:8px;padding:12px 14px;font-size:13.5px;line-height:1.9;">
+      <b>সারাংশ:</b> <span id="gformSummaryText">—</span>
     </div>
     <div class="row">
       <button class="primary" id="gformGenerateBtn">Google Form জেনারেট করুন</button>
@@ -711,7 +756,7 @@
       <ol>
         <li><a href="https://script.google.com" target="_blank" style="color:var(--yellow);">script.google.com</a> এ যান এবং <b>New Project</b> ক্লিক করুন</li>
         <li>খালি এডিটরে যা লেখা আছে তা মুছে উপরের কোডটি পেস্ট করে দিন</li>
-        <li>উপরে ▶️ <b>Run</b> বাটনে ক্লিক করুন (ফাংশন <code>createFormFromData</code> সিলেক্ট করা থাকতে হবে)</li>
+        <li>উপরে 💾 <b>সেভ আইকনে</b> ক্লিক করে প্রজেক্টটা Drive-এ সেভ করুন (Ctrl+S ও কাজ করবে), তারপর ▶️ <b>Run</b> বাটনে ক্লিক করুন</li>
         <li>প্রথমবার চালালে Google পারমিশন চাইবে — নিজের অ্যাকাউন্ট দিয়ে অনুমতি দিন</li>
         <li>রান শেষ হলে নিচে <b>Execution log</b>-এ ফর্মের লিংক পেয়ে যাবেন</li>
         <li><b>জরুরি:</b> ফর্ম খুলে Settings ⚙️ → <b>Quizzes</b> ট্যাবে গিয়ে "Release grade" → <b>Immediately after each submission</b> সিলেক্ট করুন এবং "Respondent can see" এর নিচে <b>Missed questions</b>, <b>Correct answers</b>, <b>Point values</b> — এই তিনটা চেকবক্স অন করে দিন, তাহলে পরীক্ষা শেষে শিক্ষার্থী সাথে সাথে তার নাম্বার দেখতে পারবে (এই সেটিংস স্ক্রিপ্ট দিয়ে অটো করা যায় না, একবার ম্যানুয়ালি করলেই হবে)</li>
@@ -722,6 +767,32 @@
 </div>
 
 <div class="toast" id="toast">ডাউনলোড শুরু হয়েছে ✓</div>
+
+<div class="modal-overlay hidden" id="allSlidesModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>সব স্লাইড প্রিভিউ (<span id="allSlidesCount">0</span>টি) — যেকোনো স্লাইডে ক্লিক করে বড় করে দেখুন</h3>
+      <button type="button" id="closeAllSlidesBtn">✕ বন্ধ করুন</button>
+    </div>
+    <div class="modal-body" id="allSlidesGrid"></div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="singleSlideModal">
+  <div class="modal-box" style="max-width:860px;">
+    <div class="modal-header">
+      <h3 id="singleSlideTitle">প্রশ্ন</h3>
+      <div class="row" style="margin:0;gap:8px;">
+        <button type="button" id="prevSlideBtn">⬅ আগের</button>
+        <button type="button" id="nextSlideBtn">পরের ➡</button>
+        <button type="button" id="closeSingleSlideBtn">✕ বন্ধ করুন</button>
+      </div>
+    </div>
+    <div class="modal-body" style="display:block;">
+      <div id="singleSlideBoxHolder" style="max-width:760px;margin:0 auto;"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 let parsedQuestions = [];
@@ -736,23 +807,32 @@ const fileNameShow = document.getElementById('fileNameShow');
 ['dragover','dragenter'].forEach(ev=>dropZone.addEventListener(ev, e=>{e.preventDefault();dropZone.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev, e=>{e.preventDefault();dropZone.classList.remove('drag');}));
 dropZone.addEventListener('drop', e=>{
-  const f = e.dataTransfer.files[0];
-  if(f){ fileInput.files = e.dataTransfer.files; handleFile(f); }
+  const files = e.dataTransfer.files;
+  if(files && files.length){ fileInput.files = files; handleFiles(files); }
 });
 fileInput.addEventListener('change', e=>{
-  const f = e.target.files[0];
-  if(f) handleFile(f);
+  const files = e.target.files;
+  if(files && files.length) handleFiles(files);
 });
 
-function handleFile(file){
-  fileNameShow.textContent = file.name;
-  getRawTextFromFile(file)
-    .then(function(rawText){
-      if((rawText||'').trim().length < 20){
-        alert('এই ফাইল থেকে কোনো লেখা পাওয়া যায়নি। .docx ফাইল দিন।');
+// একাধিক .docx ফাইল একসাথে দিলে সবগুলো থেকে টেক্সট বের করে একটাই তালিকায় জোড়া লাগানো হয় —
+// প্রতিটা ফাইলের প্রশ্ন আলাদা করে চেনার জন্য মাঝখানে দুইটা নতুন লাইন রাখা হচ্ছে
+function handleFiles(fileList){
+  const files = Array.from(fileList);
+  fileNameShow.textContent = files.length === 1
+    ? files[0].name
+    : (toBnNumber(files.length) + 'টি ফাইল: ' + files.map(f=>f.name).join(', '));
+
+  Promise.all(files.map(f=>getRawTextFromFile(f).catch(err=>{
+    throw new Error(f.name + ' — ' + err.message);
+  })))
+    .then(function(rawTexts){
+      const combined = rawTexts.join('\n\n');
+      if((combined||'').trim().length < 20){
+        alert('এই ফাইল(গুলো) থেকে কোনো লেখা পাওয়া যায়নি। .docx ফাইল দিন।');
         return;
       }
-      applyParsedText(rawText, true);
+      applyParsedText(combined, true);
     })
     .catch(function(err){
       alert('ফাইল পড়তে সমস্যা হয়েছে। শুধু .docx ফাইল সাপোর্ট করে। ত্রুটি: ' + err.message);
@@ -786,6 +866,7 @@ function applyParsedText(rawText, resetModeUI){
   }
   renderTable();
   updatePreview();
+  if(typeof updateGformSummary === 'function') updateGformSummary();
   document.getElementById('reviewStep').classList.remove('hidden');
   if(resetModeUI){
     // ফাইল আপলোডের আগেই মোড (PPTX/Google Form) বাছাই হয়ে গেছে —
@@ -800,6 +881,7 @@ function applyParsedText(rawText, resetModeUI){
     }
     document.getElementById('reviewStep').scrollIntoView({behavior:'smooth', block:'start'});
   }
+  scheduleDraftSave();
 }
 
 document.getElementById('reparseBtn').addEventListener('click', ()=>{
@@ -1009,6 +1091,10 @@ function warnMessages(q){
   if(!q.text.trim()) msgs.push('⚠ প্রশ্ন খালি');
   if(q.type === 'mcq' && correctIdx === -1) msgs.push('⚠ উত্তর মিলছে না, চেক করুন');
   if(hasDuplicateOptions(q)) msgs.push('⚠ ডুপ্লিকেট অপশন আছে');
+  // প্রশ্ন/অপশন অনেক বেশি লম্বা হলে স্লাইডে অপশনের ওপর দিয়ে টেক্সট উপচে যেতে পারে —
+  // এই সীমাগুলো একটা মোটামুটি হিসাব, একদম নিশ্চিত সীমা না, তবে সতর্ক করার জন্য যথেষ্ট
+  if(q.text.trim().length > 200) msgs.push('⚠ প্রশ্নটি বেশ লম্বা (' + q.text.trim().length + ' অক্ষর) — স্লাইডে জায়গা কম পড়তে পারে');
+  if(q.type === 'mcq' && q.options && q.options.some(o => o.trim().length > 90)) msgs.push('⚠ কোনো একটা অপশন বেশ লম্বা — ছোট করার কথা ভাবুন');
   return msgs;
 }
 
@@ -1035,19 +1121,32 @@ function renderTable(){
     const needsWarn = msgs.length > 0;
     if(needsWarn) tr.classList.add('warn');
 
+    const selectCell = `<td><input type="checkbox" class="qSelect" data-idx="${i}"></td>`;
+    const actionCell = `
+        <td>
+          <div class="row-actions">
+            <button type="button" class="rowUpBtn" data-idx="${i}" title="উপরে সরান">🔼</button>
+            <button type="button" class="rowDownBtn" data-idx="${i}" title="নিচে সরান">🔽</button>
+            <button type="button" class="rowDeleteBtn" data-idx="${i}" title="ডিলিট করুন">🗑️</button>
+          </div>
+        </td>`;
+
     if(q.type === 'passage'){
       tr.classList.add('passage-row');
       tr.innerHTML = `
+        ${selectCell}
         <td class="qnum">📖</td>
         <td><textarea data-idx="${i}" class="qText" placeholder="অনুচ্ছেদ/উদ্দীপকের নির্দেশনা">${escapeHtml(q.text)}</textarea></td>
         <td colspan="2"><textarea data-idx="${i}" class="qBody" placeholder="অনুচ্ছেদ/উদ্দীপকের মূল লেখা">${escapeHtml(q.body||'')}</textarea>
           ${msgs.map(m=>`<div class="warn-tag">${m}</div>`).join('')}
         </td>
+        ${actionCell}
       `;
     } else {
       qNumCounter++;
       const displayNum = q.origNum ? toBnNumber(q.origNum) : qNumCounter;
       tr.innerHTML = `
+        ${selectCell}
         <td class="qnum">${displayNum}</td>
         <td><textarea data-idx="${i}" class="qText">${escapeHtml(q.text)}</textarea></td>
         <td><textarea data-idx="${i}" class="qOpts" placeholder="i, ii, iii থাকলে সেগুলোসহ প্রতি লাইনে একটি করে লিখুন">${escapeHtml(buildOptsTextareaValue(q))}</textarea></td>
@@ -1055,6 +1154,7 @@ function renderTable(){
           <input type="text" data-idx="${i}" class="qAns" value="${escapeHtml(q.answerRaw)}" placeholder="যেমন: খ">
           ${msgs.map(m=>`<div class="warn-tag">${m}</div>`).join('')}
         </td>
+        ${actionCell}
       `;
     }
     tbody.appendChild(tr);
@@ -1066,6 +1166,103 @@ function renderTable(){
   tbody.querySelectorAll('.qOpts').forEach(el=>el.addEventListener('input', onEdit));
   tbody.querySelectorAll('.qAns').forEach(el=>el.addEventListener('input', onEdit));
   tbody.querySelectorAll('.qBody').forEach(el=>el.addEventListener('input', onEdit));
+  tbody.querySelectorAll('.rowDeleteBtn').forEach(el=>el.addEventListener('click', onRowDelete));
+  tbody.querySelectorAll('.rowUpBtn').forEach(el=>el.addEventListener('click', ()=>onRowMove(el, -1)));
+  tbody.querySelectorAll('.rowDownBtn').forEach(el=>el.addEventListener('click', ()=>onRowMove(el, 1)));
+
+  const selectAllEl = document.getElementById('selectAllQ');
+  if(selectAllEl) selectAllEl.checked = false;
+
+  filterQuestionRows();
+  if(typeof updateGformSummary === 'function') updateGformSummary();
+}
+
+// রিভিউ টেবিলে সার্চ — প্রশ্ন/অপশন/উত্তর মিলিয়ে যে রো-গুলো ম্যাচ করে না সেগুলো লুকিয়ে রাখে
+function filterQuestionRows(){
+  const searchEl = document.getElementById('questionSearchInput');
+  if(!searchEl) return;
+  const term = searchEl.value.trim().toLowerCase();
+  const tbody = document.getElementById('qTableBody');
+  if(!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  let visibleCount = 0;
+  rows.forEach(row=>{
+    if(!term){ row.classList.remove('hidden'); visibleCount++; return; }
+    const rowText = row.textContent.toLowerCase() + ' ' +
+      Array.from(row.querySelectorAll('textarea, input[type=text]')).map(el=>el.value.toLowerCase()).join(' ');
+    const match = rowText.includes(term);
+    row.classList.toggle('hidden', !match);
+    if(match) visibleCount++;
+  });
+
+  let noResultRow = tbody.querySelector('.no-search-result');
+  if(term && visibleCount === 0){
+    if(!noResultRow){
+      noResultRow = document.createElement('tr');
+      noResultRow.className = 'no-search-result';
+      noResultRow.innerHTML = '<td colspan="6" style="text-align:center;color:var(--chalk-dim);padding:16px;">কোনো প্রশ্ন খুঁজে পাওয়া যায়নি</td>';
+      tbody.appendChild(noResultRow);
+    }
+  } else if(noResultRow){
+    noResultRow.remove();
+  }
+}
+const questionSearchInputEl = document.getElementById('questionSearchInput');
+if(questionSearchInputEl){
+  questionSearchInputEl.addEventListener('input', filterQuestionRows);
+}
+
+function onRowDelete(e){
+  const i = parseInt(e.currentTarget.dataset.idx, 10);
+  if(!confirm('এই প্রশ্নটা ডিলিট করবেন?')) return;
+  parsedQuestions.splice(i, 1);
+  renderTable();
+  scheduleDraftSave();
+  showToast('প্রশ্ন ডিলিট করা হয়েছে ✓');
+}
+
+function onRowMove(el, dir){
+  const i = parseInt(el.dataset.idx, 10);
+  const j = i + dir;
+  if(j < 0 || j >= parsedQuestions.length) return;
+  const tmp = parsedQuestions[i];
+  parsedQuestions[i] = parsedQuestions[j];
+  parsedQuestions[j] = tmp;
+  renderTable();
+  scheduleDraftSave();
+}
+
+const addQuestionBtnEl = document.getElementById('addQuestionBtn');
+if(addQuestionBtnEl){
+  addQuestionBtnEl.addEventListener('click', ()=>{
+    parsedQuestions.push({ type:'mcq', text:'', options:['','','',''], answerRaw:'', chapter:'' });
+    renderTable();
+    scheduleDraftSave();
+    const tbody = document.getElementById('qTableBody');
+    const lastTextarea = tbody.querySelector('tr:last-child .qText');
+    if(lastTextarea){ lastTextarea.scrollIntoView({behavior:'smooth', block:'center'}); lastTextarea.focus(); }
+  });
+}
+
+const deleteSelectedBtnEl = document.getElementById('deleteSelectedBtn');
+if(deleteSelectedBtnEl){
+  deleteSelectedBtnEl.addEventListener('click', ()=>{
+    const checked = Array.from(document.querySelectorAll('.qSelect:checked')).map(el=>parseInt(el.dataset.idx,10));
+    if(checked.length === 0){ alert('কোনো প্রশ্ন সিলেক্ট করা হয়নি।'); return; }
+    if(!confirm(toBnNumber(checked.length) + 'টি প্রশ্ন ডিলিট করবেন?')) return;
+    const checkedSet = new Set(checked);
+    parsedQuestions = parsedQuestions.filter((q,i)=>!checkedSet.has(i));
+    renderTable();
+    scheduleDraftSave();
+    showToast('সিলেক্ট করা প্রশ্নগুলো ডিলিট করা হয়েছে ✓');
+  });
+}
+
+const selectAllQEl = document.getElementById('selectAllQ');
+if(selectAllQEl){
+  selectAllQEl.addEventListener('change', e=>{
+    document.querySelectorAll('.qSelect').forEach(el=>{ el.checked = e.target.checked; });
+  });
 }
 
 function onEdit(e){
@@ -1099,6 +1296,7 @@ function onEdit(e){
     q.type = q.options.length > 0 ? 'mcq' : 'short';
   }
   if(e.target.classList.contains('qAns')) q.answerRaw = e.target.value;
+  scheduleDraftSave();
 
   const msgs = warnMessages(q);
   row.classList.toggle('warn', msgs.length > 0);
@@ -1122,6 +1320,27 @@ const settingsStepEl = document.getElementById('settingsStep');
 if(settingsStepEl){
   settingsStepEl.addEventListener('input', updatePreview);
   settingsStepEl.addEventListener('change', updatePreview);
+}
+
+// Google Form সেটিংসের সারাংশ — শিরোনাম/প্রশ্ন সংখ্যা/পয়েন্ট/শাফল একনজরে দেখায়
+function updateGformSummary(){
+  const summaryEl = document.getElementById('gformSummaryText');
+  if(!summaryEl) return;
+  const title = (document.getElementById('formTitle').value || 'প্রশ্নাবলী').trim() || 'প্রশ্নাবলী';
+  const pointsEl = document.getElementById('gformPoints');
+  const points = pointsEl ? (parseFloat(pointsEl.value) || 0) : 1;
+  const shuffle = document.getElementById('gformShuffle') ? document.getElementById('gformShuffle').checked : false;
+  const qCount = parsedQuestions.filter(q=>q.type !== 'passage').length;
+  summaryEl.innerHTML =
+    '📋 শিরোনাম: <b>' + escapeHtml(title) + '</b> &nbsp;|&nbsp; ' +
+    '🔢 মোট প্রশ্ন: <b>' + toBnNumber(qCount) + 'টি</b> &nbsp;|&nbsp; ' +
+    '🎯 প্রতি প্রশ্নে পয়েন্ট: <b>' + points + '</b> &nbsp;|&nbsp; ' +
+    '🔀 শাফল: <b>' + (shuffle ? 'চালু' : 'বন্ধ') + '</b>';
+}
+const gformSettingsStepEl = document.getElementById('gformSettingsStep');
+if(gformSettingsStepEl){
+  gformSettingsStepEl.addEventListener('input', updateGformSummary);
+  gformSettingsStepEl.addEventListener('change', updateGformSummary);
 }
 
 function getVal(id, fallback){
@@ -1163,6 +1382,14 @@ function updatePreview(){
   pvFooter.textContent = footerText;
 
   pvTopbar.style.height = (headerH * scale) + 'px';
+
+  // থিম কালার — হেডার বার আর মাঝের চ্যাপ্টার টেক্সটের রঙ
+  const topbarColor = getVal('topbarColor', '#e8720c');
+  const chapterAccentColor = getVal('chapterAccentColor', '#f5e642');
+  pvTopbar.style.background = topbarColor;
+  pvChapter.style.color = chapterAccentColor;
+  const pvLineEl = document.querySelector('.pv-line');
+  if(pvLineEl) pvLineEl.style.background = topbarColor;
 
   pvSubject.style.textAlign = getVal('subjectAlign','left');
   pvChapter.style.textAlign = getVal('chapterAlign','center');
@@ -1217,6 +1444,375 @@ function updatePreview(){
 
 window.addEventListener('resize', ()=>{ clearTimeout(window.__pvResizeT); window.__pvResizeT = setTimeout(updatePreview, 120); });
 
+// ============ কালার থিম প্রিসেট ============
+const THEME_PRESETS = {
+  orange: { topbar:'#e8720c', accent:'#f5e642', ans:'#e8720c' },
+  blue:   { topbar:'#1a5b9e', accent:'#ffd166', ans:'#1a5b9e' },
+  green:  { topbar:'#1b6e42', accent:'#ffe066', ans:'#1b6e42' },
+  purple: { topbar:'#5b2c82', accent:'#ffd166', ans:'#5b2c82' },
+};
+function applyThemePreset(name){
+  const preset = THEME_PRESETS[name];
+  if(!preset) return; // 'custom' হলে কিছু বদলাবে না, ইউজার নিজে কালার বাছাই করবে
+  document.getElementById('topbarColor').value = preset.topbar;
+  document.getElementById('chapterAccentColor').value = preset.accent;
+  document.getElementById('ansShapeColor').value = preset.ans;
+  updatePreview();
+}
+const themePresetEl = document.getElementById('themePreset');
+if(themePresetEl){
+  themePresetEl.addEventListener('change', e=>applyThemePreset(e.target.value));
+}
+
+// থিম প্রিসেট ড্রপডাউনটা যেন সবসময় আসল রঙের সাথে মিলে থাকে — কেউ ম্যানুয়ালি কালার পিকার দিয়ে
+// রঙ বদলালে, বা সেভ করা প্রিসেট/সেটিংস লোড করলে, ড্রপডাউনটাও সেই অনুযায়ী অটো আপডেট হবে
+function syncThemePresetDropdown(){
+  if(!themePresetEl) return;
+  const topbarEl = document.getElementById('topbarColor');
+  const accentEl = document.getElementById('chapterAccentColor');
+  const ansEl = document.getElementById('ansShapeColor');
+  if(!topbarEl || !accentEl || !ansEl) return;
+  const topbar = topbarEl.value.toLowerCase();
+  const accent = accentEl.value.toLowerCase();
+  const ans = ansEl.value.toLowerCase();
+  let matched = 'custom';
+  for(const name in THEME_PRESETS){
+    const p = THEME_PRESETS[name];
+    if(p.topbar.toLowerCase() === topbar && p.accent.toLowerCase() === accent && p.ans.toLowerCase() === ans){
+      matched = name;
+      break;
+    }
+  }
+  themePresetEl.value = matched;
+}
+['topbarColor','chapterAccentColor','ansShapeColor'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('input', syncThemePresetDropdown);
+});
+
+// ============ সব স্লাইড প্রিভিউ (ডাউনলোডের আগে দ্রুত চোখ বুলিয়ে নেওয়ার জন্য) ============
+function collectPreviewStyleSettings(){
+  return {
+    headerH: getVal('headerH',0.9),
+    topbarColor: getVal('topbarColor','#e8720c'),
+    chapterAccentColor: getVal('chapterAccentColor','#f5e642'),
+    subjectAlign: getVal('subjectAlign','left'),
+    chapterAlign: getVal('chapterAlign','center'),
+    badgeAlign: getVal('badgeAlign','right'),
+    subjectBold: getVal('subjectBold', false),
+    chapterBold: getVal('chapterBold', true),
+    badgeBold: getVal('badgeBold', false),
+    subjectFontSize: getVal('subjectFontSize',13),
+    chapterFontSize: getVal('chapterFontSize',20),
+    badgeFontSize: getVal('badgeFontSize',14),
+    cX: getVal('contentX', 2.3), cY: getVal('contentY', 1.15), cW: getVal('contentW', 10.3),
+    qFontSize: getVal('qFontSize', 20),
+    qColor: getVal('qColor', '#ffffff'),
+    qLineSpacing: getVal('qLineSpacing', 1.5),
+    oX: getVal('optX', 6.4), oY: getVal('optY', 1.95), oW: getVal('optW', 6.4),
+    optColor: getVal('optColor', '#ffffff'),
+    optFontSize: getVal('optFontSize', 18),
+    optLineSpacing: getVal('optLineSpacing', 1.5),
+    ansW: getVal('ansShapeW', 1.8), ansH: getVal('ansShapeH', 0.42),
+    ansX: getVal('ansShapeX', 9.7), ansY: getVal('ansShapeY', 5.68),
+    ansShapeColor: getVal('ansShapeColor', '#e8720c'),
+    ansFontSize: getVal('ansFontSize', 14),
+  };
+}
+
+function fillMiniCard(root, subjectText, chapterTextForThis, badgeText, footerText, qText, optionLines, ansText, s){
+  const scale = root.clientWidth / 13.333;
+  const ptToPx = pt => (pt * scale) / 72;
+
+  const left = root.querySelector('.pv-left');
+  const mid = root.querySelector('.pv-mid');
+  const right = root.querySelector('.pv-right');
+  const topbar = root.querySelector('.pv-topbar');
+  const qEl = root.querySelector('.pv-q');
+  const optsEl = root.querySelector('.pv-opts');
+  const ansEl = root.querySelector('.pv-ans');
+  const lineEl = root.querySelector('.pv-line');
+  const footerEl = root.querySelector('.pv-footer');
+
+  left.textContent = subjectText;
+  mid.textContent = chapterTextForThis;
+  right.textContent = badgeText;
+  footerEl.textContent = footerText;
+
+  topbar.style.height = (s.headerH * scale) + 'px';
+  topbar.style.background = s.topbarColor;
+  mid.style.color = s.chapterAccentColor;
+  lineEl.style.background = s.topbarColor;
+
+  left.style.textAlign = s.subjectAlign;
+  mid.style.textAlign = s.chapterAlign;
+  right.style.textAlign = s.badgeAlign;
+  left.style.fontWeight = s.subjectBold ? '700' : '500';
+  mid.style.fontWeight = s.chapterBold ? '700' : '500';
+  right.style.fontWeight = s.badgeBold ? '700' : '500';
+  left.style.fontSize = ptToPx(s.subjectFontSize) + 'px';
+  mid.style.fontSize = ptToPx(s.chapterFontSize) + 'px';
+  right.style.fontSize = ptToPx(s.badgeFontSize) + 'px';
+
+  qEl.style.left = (s.cX * scale) + 'px';
+  qEl.style.top = (s.cY * scale) + 'px';
+  qEl.style.width = (s.cW * scale) + 'px';
+  qEl.style.right = 'auto';
+  qEl.style.fontSize = ptToPx(s.qFontSize) + 'px';
+  qEl.style.color = s.qColor;
+  qEl.style.lineHeight = String(s.qLineSpacing);
+  qEl.innerHTML = escapeHtml(qText).replace(/\n/g, '<br>');
+
+  if(optionLines){
+    optsEl.style.left = (s.oX * scale) + 'px';
+    optsEl.style.top = (s.oY * scale) + 'px';
+    optsEl.style.width = (s.oW * scale) + 'px';
+    optsEl.style.right = 'auto';
+    optsEl.style.bottom = 'auto';
+    optsEl.innerHTML = optionLines.map(t=>`<div class="pv-opt">${escapeHtml(t)}</div>`).join('');
+    optsEl.querySelectorAll('.pv-opt').forEach(el=>{
+      el.style.color = s.optColor;
+      el.style.fontSize = ptToPx(s.optFontSize) + 'px';
+      el.style.lineHeight = String(s.optLineSpacing);
+    });
+  } else {
+    optsEl.style.display = 'none';
+  }
+
+  if(ansText){
+    ansEl.style.left = (s.ansX * scale) + 'px';
+    ansEl.style.top = (s.ansY * scale) + 'px';
+    ansEl.style.width = (s.ansW * scale) + 'px';
+    ansEl.style.height = (s.ansH * scale) + 'px';
+    ansEl.style.right = 'auto';
+    ansEl.style.bottom = 'auto';
+    ansEl.style.display = 'flex';
+    ansEl.style.alignItems = 'center';
+    ansEl.style.justifyContent = 'center';
+    ansEl.style.background = s.ansShapeColor;
+    ansEl.style.fontSize = ptToPx(s.ansFontSize) + 'px';
+    ansEl.textContent = ansText;
+  } else {
+    ansEl.style.display = 'none';
+  }
+}
+
+function createEmptyPreviewCard(){
+  const card = document.createElement('div');
+  card.className = 'preview-box mini-slide';
+  card.innerHTML = `
+    <div class="pv-topbar">
+      <div class="pv-left"></div>
+      <div class="pv-mid"></div>
+      <div class="pv-right"></div>
+    </div>
+    <div class="pv-q"></div>
+    <div class="pv-opts"></div>
+    <div class="pv-ans"></div>
+    <div class="pv-line"></div>
+    <div class="pv-footer"></div>
+  `;
+  return card;
+}
+
+// প্রতিটা প্রশ্নের জন্য কার্ডে বসানোর মতো টেক্সট আগে থেকে হিসাব করে রাখা হচ্ছে —
+// এই একই ডেটা মিনি-গ্রিড আর ফুলস্ক্রিন ভিউ দুই জায়গাতেই ব্যবহার হবে
+let slideContents = [];
+function buildSlideContents(){
+  const globalChapterText = getVal('chapterText','অধ্যায়');
+  const bnStyleEl = document.getElementById('bnLabelStyle');
+  const enStyleEl = document.getElementById('enLabelStyle');
+  const bnStyle = bnStyleEl ? bnStyleEl.value : 'bn';
+  const enStyle = enStyleEl ? enStyleEl.value : 'en';
+
+  let qNumCounter = 0;
+  slideContents = parsedQuestions.map(q=>{
+    const chapterTextForThis = (parsedHasMultipleChapters && q.chapter) ? q.chapter : globalChapterText;
+    if(q.type === 'passage'){
+      return {
+        label: '📖 অনুচ্ছেদ/উদ্দীপক',
+        chapterTextForThis,
+        qText: '❑ ' + q.text + (q.body ? ('\n' + q.body) : ''),
+        optionLines: null,
+        ansText: null,
+      };
+    }
+    qNumCounter++;
+    const qDisplayNum = q.origNum ? toBnNumber(q.origNum) : toBnNumber(qNumCounter);
+    const qText = qDisplayNum + '. ' + q.text;
+    if(q.type === 'mcq' && q.options && q.options.length){
+      const isBn = isBengaliText(q.text) || q.options.some(o=>isBengaliText(o));
+      const style = isBn ? bnStyle : enStyle;
+      const correctIdx = resolveCorrectIndex(q);
+      const optionLines = [];
+      if(q.statements && q.statements.length){
+        q.statements.forEach(st=>optionLines.push(st.label + '. ' + st.text));
+        optionLines.push(q.statementPrompt || 'নিচের কোনটি সঠিক?');
+      }
+      q.options.forEach((opt, oi)=>optionLines.push(labelForStyle(style, oi) + ' ' + opt));
+      const ansText = correctIdx !== -1 ? ('উত্তর: ' + labelForStyle(style, correctIdx).replace(')','')) : null;
+      return { label: 'প্রশ্ন ' + qDisplayNum, chapterTextForThis, qText, optionLines, ansText };
+    }
+    const ansText = q.answerRaw ? ('উত্তর: ' + q.answerRaw) : null;
+    return { label: 'প্রশ্ন ' + qDisplayNum, chapterTextForThis, qText, optionLines: null, ansText };
+  });
+}
+
+function renderAllSlidesPreview(){
+  const grid = document.getElementById('allSlidesGrid');
+  const modal = document.getElementById('allSlidesModal');
+  if(!grid || !modal) return;
+  if(parsedQuestions.length === 0){ showToast('কোনো প্রশ্ন নেই — আগে ফাইল আপলোড করুন'); return; }
+
+  const subjectText = getVal('subjectText','বিষয়');
+  const badgeText = getVal('badgeText','ONESHOT CLASS');
+  const footerText = getVal('footerText','');
+  const s = collectPreviewStyleSettings();
+
+  buildSlideContents();
+
+  // মডালটা আগে দেখানো হচ্ছে, তারপর কার্ড বসানো হচ্ছে — কারণ display:none থাকা অবস্থায়
+  // clientWidth সবসময় ০ আসে, ফলে সব লেখা/পজিশন হিসাব ভুল হয়ে অদৃশ্য হয়ে যেত
+  modal.classList.remove('hidden');
+  grid.innerHTML = '';
+
+  slideContents.forEach((sc, idx)=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'mini-slide-wrap';
+
+    const label = document.createElement('div');
+    label.className = 'mini-slide-label';
+    label.textContent = sc.label;
+
+    const card = createEmptyPreviewCard();
+    card.addEventListener('click', ()=>openSingleSlide(idx));
+
+    wrap.appendChild(label);
+    wrap.appendChild(card);
+    grid.appendChild(wrap);
+
+    fillMiniCard(card, subjectText, sc.chapterTextForThis, badgeText, footerText, sc.qText, sc.optionLines, sc.ansText, s);
+  });
+
+  document.getElementById('allSlidesCount').textContent = toBnNumber(parsedQuestions.length);
+}
+
+const previewAllBtnEl = document.getElementById('previewAllBtn');
+if(previewAllBtnEl) previewAllBtnEl.addEventListener('click', renderAllSlidesPreview);
+const closeAllSlidesBtnEl = document.getElementById('closeAllSlidesBtn');
+if(closeAllSlidesBtnEl) closeAllSlidesBtnEl.addEventListener('click', ()=>{
+  document.getElementById('allSlidesModal').classList.add('hidden');
+});
+const allSlidesModalEl = document.getElementById('allSlidesModal');
+if(allSlidesModalEl){
+  allSlidesModalEl.addEventListener('click', e=>{
+    if(e.target === allSlidesModalEl) allSlidesModalEl.classList.add('hidden');
+  });
+}
+
+// ============ একটা স্লাইড ফুলস্ক্রিনের মতো বড় করে দেখা — মিনি প্রিভিউতে ক্লিক করলে খুলবে ============
+let currentSlideIdx = 0;
+let singleSlideCardEl = null;
+function openSingleSlide(idx){
+  const modal = document.getElementById('singleSlideModal');
+  if(!modal || !slideContents.length) return;
+  currentSlideIdx = idx;
+  modal.classList.remove('hidden');
+  renderSingleSlideAt(currentSlideIdx);
+}
+function renderSingleSlideAt(idx){
+  const holder = document.getElementById('singleSlideBoxHolder');
+  if(!holder) return;
+  const sc = slideContents[idx];
+  if(!sc) return;
+
+  const subjectText = getVal('subjectText','বিষয়');
+  const badgeText = getVal('badgeText','ONESHOT CLASS');
+  const footerText = getVal('footerText','');
+  const s = collectPreviewStyleSettings();
+
+  holder.innerHTML = '';
+  singleSlideCardEl = createEmptyPreviewCard();
+  singleSlideCardEl.classList.add('big-slide');
+  singleSlideCardEl.style.maxWidth = 'none';
+  holder.appendChild(singleSlideCardEl);
+  fillMiniCard(singleSlideCardEl, subjectText, sc.chapterTextForThis, badgeText, footerText, sc.qText, sc.optionLines, sc.ansText, s);
+
+  document.getElementById('singleSlideTitle').textContent = sc.label + ' (' + toBnNumber(idx+1) + '/' + toBnNumber(slideContents.length) + ')';
+  document.getElementById('prevSlideBtn').disabled = (idx <= 0);
+  document.getElementById('nextSlideBtn').disabled = (idx >= slideContents.length - 1);
+}
+const prevSlideBtnEl = document.getElementById('prevSlideBtn');
+if(prevSlideBtnEl) prevSlideBtnEl.addEventListener('click', ()=>{
+  if(currentSlideIdx > 0){ currentSlideIdx--; renderSingleSlideAt(currentSlideIdx); }
+});
+const nextSlideBtnEl = document.getElementById('nextSlideBtn');
+if(nextSlideBtnEl) nextSlideBtnEl.addEventListener('click', ()=>{
+  if(currentSlideIdx < slideContents.length - 1){ currentSlideIdx++; renderSingleSlideAt(currentSlideIdx); }
+});
+const closeSingleSlideBtnEl = document.getElementById('closeSingleSlideBtn');
+if(closeSingleSlideBtnEl) closeSingleSlideBtnEl.addEventListener('click', ()=>{
+  document.getElementById('singleSlideModal').classList.add('hidden');
+});
+const singleSlideModalEl = document.getElementById('singleSlideModal');
+if(singleSlideModalEl){
+  singleSlideModalEl.addEventListener('click', e=>{
+    if(e.target === singleSlideModalEl) singleSlideModalEl.classList.add('hidden');
+  });
+}
+document.addEventListener('keydown', e=>{
+  const modal = document.getElementById('singleSlideModal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  if(e.key === 'Escape') modal.classList.add('hidden');
+  if(e.key === 'ArrowLeft' && prevSlideBtnEl && !prevSlideBtnEl.disabled) prevSlideBtnEl.click();
+  if(e.key === 'ArrowRight' && nextSlideBtnEl && !nextSlideBtnEl.disabled) nextSlideBtnEl.click();
+});
+
+
+const DRAFT_KEY = 'wtp_draft_v1';
+let draftSaveTimer = null;
+function saveDraft(){
+  try{
+    const rawTextOutEl = document.getElementById('rawTextOut');
+    const rawText = rawTextOutEl ? rawTextOutEl.value : '';
+    if(!rawText || rawText.trim().length < 10) return;
+    const draft = { rawText, selectedMode, savedAt: Date.now() };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch(e){ /* localStorage না থাকলে/ফুল থাকলে চুপচাপ বাদ দেওয়া হচ্ছে */ }
+}
+function scheduleDraftSave(){
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(saveDraft, 800);
+}
+function clearDraft(){
+  try{ localStorage.removeItem(DRAFT_KEY); } catch(e){}
+}
+
+(function checkForSavedDraft(){
+  let draft = null;
+  try{
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if(raw) draft = JSON.parse(raw);
+  } catch(e){ draft = null; }
+  if(!draft || !draft.rawText || draft.rawText.trim().length < 10) return;
+
+  const banner = document.getElementById('draftBanner');
+  if(!banner) return;
+  banner.classList.remove('hidden');
+
+  document.getElementById('draftRestoreBtn').addEventListener('click', ()=>{
+    if(draft.selectedMode) selectOutputMode(draft.selectedMode);
+    document.getElementById('uploadStep').classList.remove('hidden');
+    applyParsedText(draft.rawText, true);
+    banner.classList.add('hidden');
+    showToast('খসড়া পুনরুদ্ধার হয়েছে ✓');
+  });
+  document.getElementById('draftDismissBtn').addEventListener('click', ()=>{
+    clearDraft();
+    banner.classList.add('hidden');
+  });
+})();
+
 // সেটিংস সেভ/লোড — এই টুলটা ব্রাউজারেই চলে, তাই সেটিংস browser-এর localStorage-এ সেভ থাকে (এই ডিভাইসেই)
 const SETTINGS_STORAGE_KEY = 'wtp_business_titan_settings_v1';
 function collectSettingsIds(){
@@ -1248,6 +1844,7 @@ function applySettingsData(data){
     else el.value = data[id];
   });
   updatePreview();
+  if(typeof syncThemePresetDropdown === 'function') syncThemePresetDropdown();
 }
 function saveSettingsToStorage(silent){
   try{
@@ -1275,6 +1872,68 @@ document.getElementById('saveSettingsBtn').addEventListener('click', ()=>saveSet
 document.getElementById('loadSettingsBtn').addEventListener('click', ()=>loadSettingsFromStorage(false));
 // পেজ লোড হওয়ার সময় আগের সেভ করা সেটিংস থাকলে চুপচাপ বসিয়ে দেয়
 loadSettingsFromStorage(true);
+
+// ============ একাধিক নামসহ প্রিসেট (Named Presets) ============
+const NAMED_PRESETS_KEY = 'wtp_named_presets_v1';
+function getNamedPresets(){
+  try{
+    const raw = localStorage.getItem(NAMED_PRESETS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch(err){ return {}; }
+}
+function setNamedPresets(obj){
+  try{ localStorage.setItem(NAMED_PRESETS_KEY, JSON.stringify(obj)); } catch(err){ /* সাইলেন্টলি বাদ */ }
+}
+function refreshPresetSelect(selectedName){
+  const sel = document.getElementById('presetSelect');
+  if(!sel) return;
+  const presets = getNamedPresets();
+  const names = Object.keys(presets).sort((a,b)=>a.localeCompare(b,'bn'));
+  sel.innerHTML = '<option value="">-- প্রিসেট বাছাই করুন --</option>' +
+    names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if(selectedName) sel.value = selectedName;
+}
+const presetSaveAsBtnEl = document.getElementById('presetSaveAsBtn');
+if(presetSaveAsBtnEl){
+  presetSaveAsBtnEl.addEventListener('click', ()=>{
+    const nameInput = document.getElementById('presetNameInput');
+    const name = (nameInput.value || '').trim();
+    if(!name){ showToast('প্রিসেটের একটা নাম দিন'); return; }
+    const presets = getNamedPresets();
+    const isOverwrite = presets.hasOwnProperty(name);
+    if(isOverwrite && !confirm('"' + name + '" নামে আগে থেকেই একটা প্রিসেট আছে — নতুন করে ওভাররাইট করবেন?')) return;
+    presets[name] = collectSettingsData();
+    setNamedPresets(presets);
+    refreshPresetSelect(name);
+    nameInput.value = '';
+    showToast('প্রিসেট "' + name + '" সেভ হয়েছে ✓');
+  });
+}
+const presetLoadBtnEl = document.getElementById('presetLoadBtn');
+if(presetLoadBtnEl){
+  presetLoadBtnEl.addEventListener('click', ()=>{
+    const name = document.getElementById('presetSelect').value;
+    if(!name){ showToast('প্রিসেট বাছাই করুন'); return; }
+    const presets = getNamedPresets();
+    if(!presets[name]){ showToast('প্রিসেটটা পাওয়া যায়নি'); return; }
+    applySettingsData(presets[name]);
+    showToast('প্রিসেট "' + name + '" লোড হয়েছে ✓');
+  });
+}
+const presetDeleteBtnEl = document.getElementById('presetDeleteBtn');
+if(presetDeleteBtnEl){
+  presetDeleteBtnEl.addEventListener('click', ()=>{
+    const name = document.getElementById('presetSelect').value;
+    if(!name){ showToast('প্রিসেট বাছাই করুন'); return; }
+    if(!confirm('প্রিসেট "' + name + '" ডিলিট করবেন?')) return;
+    const presets = getNamedPresets();
+    delete presets[name];
+    setNamedPresets(presets);
+    refreshPresetSelect();
+    showToast('প্রিসেট ডিলিট হয়েছে ✓');
+  });
+}
+refreshPresetSelect();
 
 // সেটিংস ফাইল হিসেবে ডাউনলোড ও ইম্পোর্ট — যাতে অন্য ডিভাইসেও একই ডিজাইন সেটিংস নিয়ে যাওয়া যায়
 document.getElementById('exportSettingsBtn').addEventListener('click', ()=>{
@@ -1682,6 +2341,10 @@ function estimateTextBoxHeight(text, fontSizePt, widthIn, opts){
 }
 
 document.getElementById('generateBtn').addEventListener('click', ()=>{
+  const generateBtnEl = document.getElementById('generateBtn');
+  const generateBtnOrigText = generateBtnEl.textContent;
+  generateBtnEl.disabled = true;
+  generateBtnEl.textContent = '⏳ তৈরি হচ্ছে...';
   const subjectText = document.getElementById('subjectText').value.trim() || 'বিষয়';
   const chapterText = document.getElementById('chapterText').value.trim() || 'অধ্যায়';
   const badgeText = document.getElementById('badgeText').value.trim() || 'ONESHOT CLASS';
@@ -1735,8 +2398,8 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
   const useTemplate = !!bgTemplateBase64;
   const tplHasHeader = document.getElementById('tplHasHeader').checked;
 
-  const ORANGE = 'E8720C';
-  const YELLOW = 'F5E642';
+  const ORANGE = (document.getElementById('topbarColor').value || '#e8720c').replace('#','').toUpperCase();
+  const YELLOW = (document.getElementById('chapterAccentColor').value || '#f5e642').replace('#','').toUpperCase();
 
   let pptx = new PptxGenJS();
   pptx.defineLayout({ name: 'WIDE', width: 13.333, height: 7.5 });
@@ -1911,6 +2574,9 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
   if(ansAnimation === 'none'){
     pptx.writeFile({ fileName: exportFileName }).then(()=>{
       showToast('ডাউনলোড শুরু হয়েছে ✓');
+    }).finally(()=>{
+      generateBtnEl.disabled = false;
+      generateBtnEl.textContent = generateBtnOrigText;
     });
   } else {
     // অ্যানিমেশন সিলেক্ট করা থাকলে আগে pptx-টা মেমরিতে বানিয়ে নিচ্ছি,
@@ -1926,6 +2592,9 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
         downloadArrayBuffer(buf, exportFileName);
         showToast('অ্যানিমেশন বসানো যায়নি, তাই সাধারণভাবে ডাউনলোড হয়েছে');
       }
+    }).finally(()=>{
+      generateBtnEl.disabled = false;
+      generateBtnEl.textContent = generateBtnOrigText;
     });
   }
 });
@@ -2079,6 +2748,7 @@ function injectAnswerTiming(xml, shapeId, textId, animType){
 // ============ আউটপুট মোড বাছাই (PPTX বনাম Google Form) — ফাইল আপলোডের আগেই বাছাই করা হয় ============
 function selectOutputMode(mode){
   selectedMode = mode;
+  scheduleDraftSave();
   const pptxBtn = document.getElementById('modeChoosePptx');
   const gformBtn = document.getElementById('modeChooseGform');
   pptxBtn.classList.toggle('selected', mode === 'pptx');
@@ -2098,6 +2768,7 @@ function selectOutputMode(mode){
     if(mode === 'gform'){
       document.getElementById('gformSettingsStep').classList.remove('hidden');
       document.getElementById('settingsStep').classList.add('hidden');
+      if(typeof updateGformSummary === 'function') updateGformSummary();
       document.getElementById('gformSettingsStep').scrollIntoView({behavior:'smooth', block:'start'});
     } else {
       document.getElementById('settingsStep').classList.remove('hidden');
@@ -2132,8 +2803,16 @@ function dedupeOptions(options){
 }
 
 document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
+  const gformGenerateBtnEl = document.getElementById('gformGenerateBtn');
+  const gformGenerateBtnOrigText = gformGenerateBtnEl.textContent;
+  gformGenerateBtnEl.disabled = true;
+  gformGenerateBtnEl.textContent = '⏳ তৈরি হচ্ছে...';
+
   const title = document.getElementById('formTitle').value.trim() || 'প্রশ্নাবলী';
   const desc = document.getElementById('formDesc').value.trim();
+  const defaultPointsEl = document.getElementById('gformPoints');
+  const defaultPoints = defaultPointsEl ? (parseFloat(defaultPointsEl.value) || 0) : 1;
+  const shuffleQuestions = document.getElementById('gformShuffle') ? document.getElementById('gformShuffle').checked : false;
 
   let code = '';
   code += '/**\n';
@@ -2145,6 +2824,7 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   code += '  form.setIsQuiz(true);\n';
   code += '  form.setCollectEmail(true);\n';
   code += '  form.setLimitOneResponsePerUser(true);\n';
+  if(shuffleQuestions) code += '  form.setShuffleQuestions(true);\n';
   if(desc) code += '  form.setDescription(' + JSON.stringify(desc) + ');\n';
   code += '  var item;\n\n';
 
@@ -2182,7 +2862,7 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
     }
 
     qNumCounter++;
-    const points = Number.isFinite(q.points) ? q.points : 1;
+    const points = Number.isFinite(q.points) ? q.points : defaultPoints;
     code += '  // প্রশ্ন ' + qNumCounter + '\n';
     // মূল ফাইলে যে নাম্বার দেওয়া আছে সেটাই দেখানো হচ্ছে (অটো-কাউন্টার না) —
     // যাতে উদ্দীপক/অনুচ্ছেদে উল্লেখিত নাম্বারের (যেমন "১ ও ২ নং প্রশ্নের উত্তর দাও") সাথে মিলে যায়
@@ -2223,6 +2903,8 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   document.getElementById('scriptOut').textContent = code;
   document.getElementById('gformOutputStep').classList.remove('hidden');
   document.getElementById('gformOutputStep').scrollIntoView({behavior:'smooth', block:'start'});
+  gformGenerateBtnEl.disabled = false;
+  gformGenerateBtnEl.textContent = gformGenerateBtnOrigText;
 });
 
 document.getElementById('gformCopyBtn').addEventListener('click', ()=>{
@@ -2245,92 +2927,6 @@ document.getElementById('gformDownloadBtn').addEventListener('click', ()=>{
 });
 
 updatePreview();
-</script>
-
-<script>
-// ============================================================
-// ==============  LOGIN GATE — এই অংশটুকু এডিট করুন  ==============
-// ============================================================
-
-// ১) নিচের firebaseConfig-এ তোমার Firebase project-এর config বসাও
-//    (Firebase Console > Project settings > General > Your apps > SDK setup and configuration)
-const firebaseConfig = {
-  apiKey: "AIzaSyC64mdTmL_64IsGzVM-0A-XJJGIL1sNYKU",
-  authDomain: "word-to-pptx-or--form.firebaseapp.com",
-  projectId: "word-to-pptx-or--form",
-  storageBucket: "word-to-pptx-or--form.firebasestorage.app",
-  messagingSenderId: "836573816280",
-  appId: "1:836573816280:web:6201e5db15b63c9eb2fead",
-  measurementId: "G-W1Y6Y811ZT"
-};
-
-// ২) যাদের access দিতে চাও তাদের Google email এখানে বসাও (ছোট হাতের অক্ষরে)
-const allowedEmails = [
-  "businesstitanofficial@gmail.com",
-  "faisalkhangds@gmail.com",
-  "faisalkhanbusinessctg@gmail.com"
-];
-
-// ============================================================
-// ==============  এর নিচে কিছু এডিট করার দরকার নেই  ==============
-// ============================================================
-
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-
-const loginGate = document.getElementById('loginGate');
-const appContent = document.getElementById('appContent');
-const userBar = document.getElementById('userBar');
-const loginError = document.getElementById('loginError');
-const loginLoading = document.getElementById('loginLoading');
-const googleSignInBtn = document.getElementById('googleSignInBtn');
-
-googleSignInBtn.addEventListener('click', () => {
-  loginError.classList.remove('show');
-  loginLoading.classList.remove('hidden');
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch((err) => {
-    loginLoading.classList.add('hidden');
-    loginError.textContent = 'Sign in ব্যর্থ হয়েছে, আবার চেষ্টা করুন। (' + err.message + ')';
-    loginError.classList.add('show');
-  });
-});
-
-document.getElementById('signOutBtn').addEventListener('click', () => {
-  auth.signOut();
-});
-
-auth.onAuthStateChanged((user) => {
-  loginLoading.classList.add('hidden');
-  if (!user) {
-    // লগ-ইন করা নেই
-    loginGate.classList.remove('hidden');
-    appContent.classList.add('hidden');
-    userBar.classList.add('hidden');
-    return;
-  }
-
-  const email = (user.email || '').toLowerCase();
-  const isAllowed = allowedEmails.map(e => e.toLowerCase()).includes(email);
-
-  if (!isAllowed) {
-    // লগ-ইন করেছে কিন্তু whitelist-এ নেই
-    loginError.innerHTML = 'এই email (' + user.email + ') দিয়ে access দেওয়া নেই। সঠিক একাউন্ট দিয়ে চেষ্টা করুন অথবা <a href="https://t.me/faisal_gds" target="_blank" rel="noopener" style="color:var(--yellow);font-weight:600;">টুলের মালিকের সাথে যোগাযোগ করুন</a>।';
-    loginError.classList.add('show');
-    loginGate.classList.remove('hidden');
-    appContent.classList.add('hidden');
-    userBar.classList.add('hidden');
-    auth.signOut();
-    return;
-  }
-
-  // Allowed — টুল দেখাও
-  loginGate.classList.add('hidden');
-  appContent.classList.remove('hidden');
-  userBar.classList.remove('hidden');
-  document.getElementById('userPhoto').src = user.photoURL || '';
-  document.getElementById('userEmail').textContent = user.email;
-});
 </script>
 </body>
 </html>
