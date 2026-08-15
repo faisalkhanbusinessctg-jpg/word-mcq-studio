@@ -765,6 +765,28 @@
       <label>বিবরণ (ঐচ্ছিক)</label>
       <textarea id="formDesc" placeholder="যেমন: প্রথম অধ্যায় — MCQ পরীক্ষা"></textarea>
     </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="gformAutoNote" style="width:auto;"> স্বয়ংক্রিয়ভাবে মার্কিং/সময়ের নোট যোগ করুন
+      </label>
+      <div class="sub" style="margin:6px 0 10px;">চালু করলে বিবরণের নিচে (উপরের কাস্টম বিবরণের পরে) নিজে থেকেই এমন একটা নোট বসে যাবে: "বি:দ্র: প্রতিটি MCQ এর সঠিক উত্তরের জন্য X নম্বর দেওয়া হবে এবং ভুল উত্তরের জন্য Y নম্বর কাটা যাবে। (পূর্ণমান: Z) সময়: N মিনিট।"</div>
+      <div class="row" style="gap:16px;">
+        <div style="flex:1;min-width:140px;">
+          <label>সময় (মিনিট)</label>
+          <input type="number" id="gformDuration" min="0" step="1" placeholder="যেমন: ১০">
+        </div>
+        <div style="flex:1;min-width:150px;display:flex;align-items:flex-end;">
+          <label style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer;">
+            <input type="checkbox" id="gformNegativeEnable" style="width:auto;"> নেগেটিভ মার্কিং আছে
+          </label>
+        </div>
+        <div style="flex:1;min-width:150px;">
+          <label>ভুল উত্তরে কর্তন (নম্বর)</label>
+          <input type="number" id="gformNegativeValue" min="0" step="0.05" value="0.25">
+        </div>
+      </div>
+      <div class="sub" style="margin-top:10px;"><b>নোটের প্রিভিউ:</b> <span id="gformNotePreview" style="color:var(--chalk);">বন্ধ আছে</span></div>
+    </div>
     <div class="field" style="display:flex; gap:10px;">
       <div style="flex:1;">
         <label>প্রতি প্রশ্নের পয়েন্ট (নম্বর)</label>
@@ -774,6 +796,15 @@
         <label style="display:flex;align-items:center;gap:6px;margin:0;">
           <input type="checkbox" id="gformShuffle" style="width:auto;"> প্রশ্নের ক্রম এলোমেলো (Shuffle) করুন
         </label>
+      </div>
+    </div>
+    <div class="field">
+      <label>শিক্ষার্থীর কাছ থেকে কী কী তথ্য নেবেন?</label>
+      <div class="sub" style="margin-bottom:10px;">✅ টিক দিলে ফিল্ডটি ফর্মে থাকবে। "বাধ্যতামূলক" টিক দিলে সেটা পূরণ না করে ফর্ম সাবমিট করা যাবে না। এই সেটআপ ব্রাউজারে সেভ থাকবে — পরের বার এই টুল খুললে আগের সেটিংসই দেখাবে।</div>
+      <div id="studentFieldsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="row" style="margin-top:12px;">
+        <input type="text" id="newStudentFieldName" placeholder="নতুন ফিল্ডের নাম (যেমন: অভিভাবকের মোবাইল)" style="flex:1;min-width:200px;">
+        <button type="button" id="addStudentFieldBtn">➕ ফিল্ড যোগ করুন</button>
       </div>
     </div>
     <div class="field" id="gformSummaryBox" style="background:var(--board);border:1px solid var(--line-strong);border-radius:8px;padding:12px 14px;font-size:13.5px;line-height:1.9;">
@@ -1462,7 +1493,161 @@ if(settingsStepEl){
   settingsStepEl.addEventListener('change', updatePreview);
 }
 
-// Google Form সেটিংসের সারাংশ — শিরোনাম/প্রশ্ন সংখ্যা/পয়েন্ট/শাফল একনজরে দেখায়
+// ============ শিক্ষার্থীর তথ্য ফিল্ড কনফিগারেশন (আগে থেকেই সেট করে রাখা যায়, ব্রাউজারে সেভ থাকে) ============
+const STUDENT_FIELDS_STORAGE_KEY = 'wpmMcqStudio_studentFieldsConfig_v1';
+const DEFAULT_STUDENT_FIELDS = [
+  {id:'name',    label:'শিক্ষার্থীর নাম:',    included:true,  required:true,  type:'text'},
+  {id:'phone',   label:'মোবাইল নাম্বার:',    included:true,  required:true,  type:'phone'},
+  {id:'roll',    label:'শিক্ষার্থীর রোল:',    included:true,  required:true,  type:'text'},
+  {id:'batch',   label:'শিক্ষার্থীর ব্যাচ:',   included:true,  required:false, type:'text'},
+  {id:'section', label:'শাখার নাম:',        included:true,  required:true,  type:'text'},
+  {id:'institution', label:'প্রতিষ্ঠানের নাম (Institution)', included:false, required:false, type:'text'}
+];
+
+function loadStudentFieldsConfig(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(STUDENT_FIELDS_STORAGE_KEY) || 'null');
+    if(saved && Array.isArray(saved.fields) && Array.isArray(saved.custom)){
+      return saved;
+    }
+  }catch(e){}
+  return {fields: DEFAULT_STUDENT_FIELDS.map(f=>({...f})), custom: []};
+}
+function saveStudentFieldsConfig(){
+  try{ localStorage.setItem(STUDENT_FIELDS_STORAGE_KEY, JSON.stringify(studentFieldsState)); }catch(e){}
+}
+function findStudentField(id){
+  return studentFieldsState.fields.find(f=>f.id===id) || studentFieldsState.custom.find(f=>f.id===id);
+}
+function renderStudentFieldsUI(){
+  const listEl = document.getElementById('studentFieldsList');
+  if(!listEl) return;
+  listEl.innerHTML = '';
+  const allFields = [...studentFieldsState.fields, ...studentFieldsState.custom];
+  allFields.forEach(f=>{
+    const isCustom = studentFieldsState.custom.includes(f);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:8px 10px;background:var(--board);border:1px solid var(--line);border-radius:6px;';
+    row.innerHTML =
+      '<label style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;margin:0;cursor:pointer;">'+
+        '<input type="checkbox" class="sf-include" data-id="'+f.id+'" '+(f.included?'checked':'')+' style="width:auto;">'+
+        '<span>'+escapeHtml(f.label)+'</span>'+
+      '</label>'+
+      '<label style="display:flex;align-items:center;gap:6px;margin:0;color:var(--chalk-dim);cursor:pointer;">'+
+        '<input type="checkbox" class="sf-required" data-id="'+f.id+'" '+(f.required?'checked':'')+' '+(f.included?'':'disabled')+' style="width:auto;">'+
+        ' বাধ্যতামূলক'+
+      '</label>'+
+      (isCustom ? '<button type="button" class="sf-remove" data-id="'+f.id+'" style="padding:4px 10px;font-size:12px;">✕ মুছুন</button>' : '');
+    listEl.appendChild(row);
+  });
+}
+let studentFieldsState = loadStudentFieldsConfig();
+renderStudentFieldsUI();
+const studentFieldsListEl = document.getElementById('studentFieldsList');
+if(studentFieldsListEl){
+  studentFieldsListEl.addEventListener('change', (e)=>{
+    const id = e.target.dataset.id;
+    if(!id) return;
+    const f = findStudentField(id);
+    if(!f) return;
+    if(e.target.classList.contains('sf-include')) f.included = e.target.checked;
+    else if(e.target.classList.contains('sf-required')) f.required = e.target.checked;
+    saveStudentFieldsConfig();
+    renderStudentFieldsUI();
+    updateGformSummary();
+  });
+  studentFieldsListEl.addEventListener('click', (e)=>{
+    if(!e.target.classList.contains('sf-remove')) return;
+    const id = e.target.dataset.id;
+    studentFieldsState.custom = studentFieldsState.custom.filter(f=>f.id!==id);
+    saveStudentFieldsConfig();
+    renderStudentFieldsUI();
+    updateGformSummary();
+  });
+}
+const addStudentFieldBtnEl = document.getElementById('addStudentFieldBtn');
+if(addStudentFieldBtnEl){
+  addStudentFieldBtnEl.addEventListener('click', ()=>{
+    const input = document.getElementById('newStudentFieldName');
+    const label = input.value.trim();
+    if(!label) return;
+    studentFieldsState.custom.push({id:'custom_'+Date.now(), label:label, included:true, required:false, type:'text'});
+    input.value = '';
+    saveStudentFieldsConfig();
+    renderStudentFieldsUI();
+    updateGformSummary();
+  });
+}
+
+// ============ মার্কিং/সময়ের অটো-নোট কনফিগারেশন (আগে থেকেই সেট, ব্রাউজারে সেভ থাকে) ============
+const NOTE_CONFIG_STORAGE_KEY = 'wpmMcqStudio_noteConfig_v1';
+function loadNoteConfig(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(NOTE_CONFIG_STORAGE_KEY) || 'null');
+    if(saved && typeof saved === 'object') return saved;
+  }catch(e){}
+  return {autoNote:true, duration:'10', negativeEnable:true, negativeValue:'0.25'};
+}
+function saveNoteConfig(){
+  const cfg = {
+    autoNote: document.getElementById('gformAutoNote') ? document.getElementById('gformAutoNote').checked : false,
+    duration: document.getElementById('gformDuration') ? document.getElementById('gformDuration').value : '',
+    negativeEnable: document.getElementById('gformNegativeEnable') ? document.getElementById('gformNegativeEnable').checked : false,
+    negativeValue: document.getElementById('gformNegativeValue') ? document.getElementById('gformNegativeValue').value : '0.25'
+  };
+  try{ localStorage.setItem(NOTE_CONFIG_STORAGE_KEY, JSON.stringify(cfg)); }catch(e){}
+}
+function applyNoteConfigToUI(){
+  const cfg = loadNoteConfig();
+  const autoEl = document.getElementById('gformAutoNote');
+  const durEl = document.getElementById('gformDuration');
+  const negEnEl = document.getElementById('gformNegativeEnable');
+  const negValEl = document.getElementById('gformNegativeValue');
+  if(autoEl) autoEl.checked = !!cfg.autoNote;
+  if(durEl) durEl.value = cfg.duration || '';
+  if(negEnEl) negEnEl.checked = !!cfg.negativeEnable;
+  if(negValEl) negValEl.value = cfg.negativeValue || '0.25';
+}
+applyNoteConfigToUI();
+
+function formatNum(n){
+  if(!Number.isFinite(n)) return '0';
+  return (Math.round(n*100)/100).toString();
+}
+// প্রতিটা প্রশ্নের পয়েন্ট (কাস্টম না থাকলে ডিফল্ট পয়েন্ট) যোগ করে মোট পূর্ণমান বের করা হচ্ছে
+function calcTotalMarks(){
+  const pointsEl = document.getElementById('gformPoints');
+  const defaultPoints = pointsEl ? (parseFloat(pointsEl.value) || 0) : 1;
+  let total = 0;
+  parsedQuestions.forEach(q=>{
+    if(q.type === 'passage') return;
+    const p = Number.isFinite(q.points) ? q.points : defaultPoints;
+    total += p;
+  });
+  return total;
+}
+function buildAutoNote(){
+  const pointsEl = document.getElementById('gformPoints');
+  const defaultPoints = pointsEl ? (parseFloat(pointsEl.value) || 0) : 1;
+  const negEnabled = document.getElementById('gformNegativeEnable') ? document.getElementById('gformNegativeEnable').checked : false;
+  const negValue = document.getElementById('gformNegativeValue') ? (parseFloat(document.getElementById('gformNegativeValue').value) || 0) : 0;
+  const duration = document.getElementById('gformDuration') ? document.getElementById('gformDuration').value.trim() : '';
+  const total = calcTotalMarks();
+  let note = 'বি:দ্র: প্রতিটি MCQ এর সঠিক উত্তরের জন্য ' + formatNum(defaultPoints) + ' নম্বর দেওয়া হবে';
+  note += negEnabled ? ' এবং ভুল উত্তরের জন্য ' + formatNum(negValue) + ' নম্বর কাটা যাবে।' : '।';
+  note += ' (পূর্ণমান: ' + formatNum(total) + ')';
+  if(duration) note += '  সময়: ' + toBnNumber(duration) + ' মিনিট।';
+  return note;
+}
+function updateNotePreview(){
+  const el = document.getElementById('gformNotePreview');
+  if(!el) return;
+  const enabled = document.getElementById('gformAutoNote') ? document.getElementById('gformAutoNote').checked : false;
+  el.textContent = enabled ? buildAutoNote() : 'বন্ধ আছে';
+}
+updateNotePreview();
+
+// Google Form সেটিংসের সারাংশ — শিরোনাম/প্রশ্ন সংখ্যা/পয়েন্ট/শাফল/শিক্ষার্থী-ফিল্ড একনজরে দেখায়
 function updateGformSummary(){
   const summaryEl = document.getElementById('gformSummaryText');
   if(!summaryEl) return;
@@ -1471,16 +1656,20 @@ function updateGformSummary(){
   const points = pointsEl ? (parseFloat(pointsEl.value) || 0) : 1;
   const shuffle = document.getElementById('gformShuffle') ? document.getElementById('gformShuffle').checked : false;
   const qCount = parsedQuestions.filter(q=>q.type !== 'passage').length;
+  const activeFields = [...studentFieldsState.fields, ...studentFieldsState.custom].filter(f=>f.included);
+  const requiredCount = activeFields.filter(f=>f.required).length;
   summaryEl.innerHTML =
     '📋 শিরোনাম: <b>' + escapeHtml(title) + '</b> &nbsp;|&nbsp; ' +
     '🔢 মোট প্রশ্ন: <b>' + toBnNumber(qCount) + 'টি</b> &nbsp;|&nbsp; ' +
     '🎯 প্রতি প্রশ্নে পয়েন্ট: <b>' + points + '</b> &nbsp;|&nbsp; ' +
-    '🔀 শাফল: <b>' + (shuffle ? 'চালু' : 'বন্ধ') + '</b>';
+    '🔀 শাফল: <b>' + (shuffle ? 'চালু' : 'বন্ধ') + '</b><br>' +
+    '👤 শিক্ষার্থীর তথ্য ফিল্ড: <b>' + activeFields.length + 'টি</b> (বাধ্যতামূলক: <b>' + requiredCount + 'টি</b>)';
+  updateNotePreview();
 }
 const gformSettingsStepEl = document.getElementById('gformSettingsStep');
 if(gformSettingsStepEl){
-  gformSettingsStepEl.addEventListener('input', updateGformSummary);
-  gformSettingsStepEl.addEventListener('change', updateGformSummary);
+  gformSettingsStepEl.addEventListener('input', ()=>{ updateGformSummary(); saveNoteConfig(); });
+  gformSettingsStepEl.addEventListener('change', ()=>{ updateGformSummary(); saveNoteConfig(); });
 }
 
 function getVal(id, fallback){
@@ -2949,7 +3138,9 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   gformGenerateBtnEl.textContent = '⏳ তৈরি হচ্ছে...';
 
   const title = document.getElementById('formTitle').value.trim() || 'প্রশ্নাবলী';
-  const desc = document.getElementById('formDesc').value.trim();
+  const customDesc = document.getElementById('formDesc').value.trim();
+  const autoNoteEnabled = document.getElementById('gformAutoNote') ? document.getElementById('gformAutoNote').checked : false;
+  const desc = [customDesc, autoNoteEnabled ? buildAutoNote() : ''].filter(Boolean).join('\n\n');
   const defaultPointsEl = document.getElementById('gformPoints');
   const defaultPoints = defaultPointsEl ? (parseFloat(defaultPointsEl.value) || 0) : 1;
   const shuffleQuestions = document.getElementById('gformShuffle') ? document.getElementById('gformShuffle').checked : false;
@@ -2968,15 +3159,19 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   if(desc) code += '  form.setDescription(' + JSON.stringify(desc) + ');\n';
   code += '  var item;\n\n';
 
-  code += '  // শিক্ষার্থীর তথ্য\n';
-  code += '  item = form.addTextItem();\n';
-  code += '  item.setTitle("Student Name:").setRequired(true);\n\n';
-  code += '  item = form.addTextItem();\n';
-  code += '  item.setTitle("Student Number:").setRequired(true);\n';
-  code += '  item.setValidation(FormApp.createTextValidation().setHelpText("অবশ্যই ১১ ডিজিটের সংখ্যা এবং ০১ দিয়ে শুরু হতে হবে").requireTextMatchesPattern("^01[0-9]{9}$").build());\n\n';
-  code += '  item = form.addTextItem();\n';
-  code += '  item.setTitle("Roll:").setRequired(false);\n\n';
-  code += '  form.addPageBreakItem().setTitle("Section 2 of 2");\n\n';
+  code += '  // শিক্ষার্থীর তথ্য (সেটিংসে যা যা টিক দেওয়া আছে)\n';
+  const activeStudentFields = [...studentFieldsState.fields, ...studentFieldsState.custom].filter(f=>f.included);
+  activeStudentFields.forEach(f=>{
+    code += '  item = form.addTextItem();\n';
+    code += '  item.setTitle("' + escGs(f.label) + '").setRequired(' + (f.required ? 'true' : 'false') + ');\n';
+    if(f.type === 'phone'){
+      code += '  item.setValidation(FormApp.createTextValidation().setHelpText("অবশ্যই ১১ ডিজিটের সংখ্যা এবং ০১ দিয়ে শুরু হতে হবে").requireTextMatchesPattern("^01[0-9]{9}$").build());\n';
+    }
+    code += '\n';
+  });
+  if(activeStudentFields.length){
+    code += '  form.addPageBreakItem().setTitle("Section 2 of 2");\n\n';
+  }
 
   let qNumCounter = 0;
   let lastChapter = null;
