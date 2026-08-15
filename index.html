@@ -1094,7 +1094,17 @@ function parseQuestions(text){
   // যাতে একটা ওয়ার্ড ফাইলের মাঝে একাধিক অধ্যায় থাকলে প্রতিটা প্রশ্ন তার নিজের অধ্যায়ের নামটাই পায়
   const chapterHeadingTestRe = /^(?:[০-৯0-9]+\s*(?:ম|য়|র্থ|ষ্ঠ|তম)?\s*অধ্যায়|অধ্যায়\s*[:ঃ\-–—]?\s*[০-৯0-9]+|chapter\s*[:ঃ\-–—]?\s*\d+)/iu;
 
+  // "Written-08", "MCQ-09", "লিখিত-০৮" ইত্যাদি — বহুনির্বাচনী আর লিখিত/রচনামূলক অংশের মাঝে
+  // ডকুমেন্টে যে আলাদা বক্স/হেডিং লাইন থাকে সেটা ধরার জন্য। এই লাইনের পরের প্রশ্নগুলো
+  // পরের সেকশন-হেডিং না আসা পর্যন্ত সেই সেকশনের (written/mcq) বলে গণ্য হবে।
+  const sectionHeadingRe = /^(?:written|mcq|লিখিত|রচনামূলক|বহুনির্বাচনী)\s*[-–—:।]?\s*[০-৯0-9]*\s*$/i;
+  let currentSection = '';
+
   for(const line of lines){
+    if(sectionHeadingRe.test(line)){
+      currentSection = /^(?:written|লিখিত|রচনামূলক)/i.test(line) ? 'written' : 'mcq';
+      continue;
+    }
     // লাইনটা যদি "২য় অধ্যায়:", "অধ্যায়-৩:", "Chapter 2:" ইত্যাদি প্যাটার্নের অধ্যায়-হেডিং হয়,
     // তাহলে সেটাকে প্রশ্ন/অপশন/উত্তরের অংশ হিসেবে না ধরে নতুন অধ্যায়ের শুরু হিসেবে ধরে নিচ্ছি —
     // ডকুমেন্টের শুরুতে হোক বা মাঝখানে, যেখানেই এমন লাইন আসুক না কেন। এতে একই ফাইলে
@@ -1130,7 +1140,7 @@ function parseQuestions(text){
       if(current) questions.push(current);
       // qm[1] হলো ওয়ার্ড ফাইলে যেভাবে নাম্বার দেওয়া আছে (অধ্যায়ভিত্তিক হলেও), সেটা রেখে দিচ্ছি —
       // যাতে স্লাইডে গোনার বদলে ফাইলের আসল নাম্বারটাই দেখানো যায়
-      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter };
+      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter, section: currentSection };
     } else if(rm){
       if(!current.statements) current.statements = [];
       current.statements.push({ label: rm[1], text: rm[2].trim() });
@@ -1276,6 +1286,10 @@ function renderTable(){
         <td><textarea data-idx="${i}" class="qOpts" placeholder="i, ii, iii থাকলে সেগুলোসহ প্রতি লাইনে একটি করে লিখুন">${escapeHtml(buildOptsTextareaValue(q))}</textarea></td>
         <td>
           <input type="text" data-idx="${i}" class="qAns" value="${escapeHtml(q.answerRaw)}" placeholder="যেমন: খ">
+          <label style="display:flex;align-items:center;gap:5px;margin-top:6px;font-size:11.5px;color:var(--chalk-dim);cursor:pointer;">
+            <input type="checkbox" data-idx="${i}" class="qWritten" ${q.section==='written' ? 'checked' : ''} style="width:auto;">
+            লিখিত/Paragraph উত্তর
+          </label>
           ${msgs.map(m=>`<div class="warn-tag">${m}</div>`).join('')}
         </td>
         ${actionCell}
@@ -1289,6 +1303,7 @@ function renderTable(){
   tbody.querySelectorAll('.qText').forEach(el=>el.addEventListener('input', onEdit));
   tbody.querySelectorAll('.qOpts').forEach(el=>el.addEventListener('input', onEdit));
   tbody.querySelectorAll('.qAns').forEach(el=>el.addEventListener('input', onEdit));
+  tbody.querySelectorAll('.qWritten').forEach(el=>el.addEventListener('change', onEdit));
   tbody.querySelectorAll('.qBody').forEach(el=>el.addEventListener('input', onEdit));
   tbody.querySelectorAll('.rowDeleteBtn').forEach(el=>el.addEventListener('click', onRowDelete));
   tbody.querySelectorAll('.rowUpBtn').forEach(el=>el.addEventListener('click', ()=>onRowMove(el, -1)));
@@ -1420,6 +1435,7 @@ function onEdit(e){
     q.type = q.options.length > 0 ? 'mcq' : 'short';
   }
   if(e.target.classList.contains('qAns')) q.answerRaw = e.target.value;
+  if(e.target.classList.contains('qWritten')) q.section = e.target.checked ? 'written' : '';
   scheduleDraftSave();
 
   const msgs = warnMessages(q);
@@ -3009,6 +3025,16 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
         code += '    item.createChoice("' + escGs(labeledOpt) + '", ' + (oi === correctIdx ? 'true' : 'false') + ')' + (oi < uniqueOpts.length-1 ? ',' : '') + '\n';
       });
       code += '  ]);\n\n';
+    } else if(q.section === 'written'){
+      // লিখিত/রচনামূলক প্রশ্ন — এক লাইনের বদলে বড় প্যারাগ্রাফ টেক্সটবক্স দেওয়া হচ্ছে,
+      // যাতে শিক্ষার্থী হিসাব/ব্যাখ্যাসহ বিস্তারিত উত্তর লিখতে পারে
+      code += '  item = form.addParagraphTextItem();\n';
+      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(true);\n';
+      if(q.answerRaw){
+        code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সমাধান/উত্তর: ' + escGs(q.answerRaw) + '").build());\n\n';
+      } else {
+        code += '\n';
+      }
     } else {
       code += '  item = form.addTextItem();\n';
       code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(true);\n';
