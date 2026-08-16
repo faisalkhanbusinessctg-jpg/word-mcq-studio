@@ -1177,12 +1177,44 @@ function parseQuestions(text){
   // "Written-08", "MCQ-09", "লিখিত-০৮" ইত্যাদি — বহুনির্বাচনী আর লিখিত/রচনামূলক অংশের মাঝে
   // ডকুমেন্টে যে আলাদা বক্স/হেডিং লাইন থাকে সেটা ধরার জন্য। এই লাইনের পরের প্রশ্নগুলো
   // পরের সেকশন-হেডিং না আসা পর্যন্ত সেই সেকশনের (written/mcq) বলে গণ্য হবে।
-  const sectionHeadingRe = /^(?:written|mcq|লিখিত|রচনামূলক|বহুনির্বাচনী)\s*[-–—:।]?\s*[০-৯0-9]*\s*$/i;
+  const sectionHeadingRe = /^(?:written|mcq|লিখিত|রচনামূলক|বহুনির্বাচনী)\s*(?:অংশ|part)?\s*[-–—:।]?\s*[০-৯0-9]*\s*$/i;
   let currentSection = '';
+  // "Written Part 40", "Marketing: ০৮×০১=০৮", "Management: 08*01 = 08", "English" — এইরকম
+  // ছোট, একলাইনের বিষয়/সেকশন-হেডার লাইন প্রায়ই ডকুমেন্টে থাকে যেটা নিজে কোনো প্রশ্ন/অপশন/উত্তর না,
+  // বরং ঠিক পরের প্রশ্ন-ব্লকের একটা শিরোনাম। sectionHeadingRe শুধু "written/mcq/লিখিত" গোছের
+  // পরিচিত শব্দ ধরে, কিন্তু "Marketing:", "English" এর মতো স্বাধীন বিষয়ের নামও হেডার হতে পারে —
+  // তাই এখানে একটা জেনারেল নিয়মে খুঁজে বের করা হচ্ছে: লাইনটা ছোট, প্রশ্ন/অপশন/উত্তরের প্যাটার্নের
+  // সাথে মেলে না, প্রশ্নবোধক চিহ্নে শেষ হয় না, আর ঠিক তার পরের লাইনটাই একটা নতুন প্রশ্নের শুরু
+  // (সংখ্যা বা রোমান নাম্বারিং দিয়ে)
+  const isHeaderCandidate = (line) => {
+    if(!line) return false;
+    if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line)) return false;
+    if(passageRe.test(line) || chapterHeadingTestRe.test(line)) return false;
+    if(/[?？]\s*$/.test(line)) return false;
+    const wordCount = line.split(/\s+/).filter(Boolean).length;
+    if(wordCount > 8 || line.length > 60) return false;
+    return true;
+  };
+  const headerLineFlags = lines.map((line, idx)=>{
+    if(!isHeaderCandidate(line)) return false;
+    const next = lines[idx+1];
+    return !!(next && (qRe.test(next) || romanRe.test(next)));
+  });
+  let pendingSectionHeader = '';
+  let activeSubpart = null;
 
-  for(const line of lines){
+  for(let li=0; li<lines.length; li++){
+    const line = lines[li];
+    const nextLine = lines[li+1] || '';
+    if(headerLineFlags[li]){
+      // এই লাইনটা একটা বিষয়/সেকশন হেডার (যেমন "English", "Marketing: ০৮×০১=০৮") —
+      // পরের প্রশ্নের সাথে এটা জুড়ে দেওয়া হবে (Google Form-এ আলাদা পেজ/সেকশন হিসেবে দেখানোর জন্য)
+      pendingSectionHeader = line;
+      continue;
+    }
     if(sectionHeadingRe.test(line)){
       currentSection = /^(?:written|লিখিত|রচনামূলক)/i.test(line) ? 'written' : 'mcq';
+      pendingSectionHeader = line;
       continue;
     }
     // লাইনটা যদি "২য় অধ্যায়:", "অধ্যায়-৩:", "Chapter 2:" ইত্যাদি প্যাটার্নের অধ্যায়-হেডিং হয়,
@@ -1202,17 +1234,22 @@ function parseQuestions(text){
 
     const pm = line.match(passageRe);
     const qm = !pm ? line.match(qRe) : null;
-    // রোমান স্টেটমেন্ট আর "নিচের কোনটি সঠিক" লাইন শুধু তখনই ধরা হবে যখন এখনো আসল
-    // অপশন (ক/খ/গ/ঘ) শুরু হয়নি — নাহলে অপশনের লেখাতেও ভুল করে মিলে যেতে পারে
-    const rm = (!pm && !qm && current && current.options.length === 0) ? line.match(romanRe) : null;
-    const spm = (!pm && !qm && !rm && current && current.options.length === 0) ? stmtPromptRe.test(line) : false;
-    const om = (!pm && !qm && !rm && !spm) ? line.match(optRe) : null;
-    const am = (!pm && !qm && !rm && !spm && !om) ? line.match(ansRe) : null;
+    // রোমান স্টেটমেন্ট শুধু তখনই ধরা হবে যখন current প্রশ্নটা এখনো আসল অপশন (ক/খ/গ/ঘ) বা
+    // মাল্টি-পার্ট সাব-আইটেম শুরু হয়নি এমন অবস্থায় আছে — অর্থাৎ এখনো তার নিজের MCQ স্টেটমেন্ট
+    // হিসেবেই গণ্য হতে পারে। current না থাকলে, বা current ইতিমধ্যে অপশন/সাবপার্ট পেয়ে "বন্ধ" হয়ে
+    // গেছে, তাহলে এই রোমান লাইনটাকে আলাদা একটা নতুন "লিখিত" প্রশ্নের শুরু হিসেবে ধরা হবে (wrm)
+    const rm = (!pm && !qm && current && current.options.length === 0 && !current.isMultiPart && !current.answerRaw) ? line.match(romanRe) : null;
+    const wrm = (!pm && !qm && !rm) ? line.match(romanRe) : null;
+    const spm = (!pm && !qm && !rm && !wrm && current && current.options.length === 0) ? stmtPromptRe.test(line) : false;
+    const om = (!pm && !qm && !rm && !wrm && !spm) ? line.match(optRe) : null;
+    const am = (!pm && !qm && !rm && !wrm && !spm && !om) ? line.match(ansRe) : null;
 
     if(pm){
       sawContent = true;
       if(current){ questions.push(current); current = null; }
-      currentPassage = { type:'passage', text: line, body: '', options: [], answerRaw: '', chapter: currentChapter };
+      currentPassage = { type:'passage', text: line, body: '', options: [], answerRaw: '', chapter: currentChapter, sectionHeaderRaw: pendingSectionHeader || null };
+      pendingSectionHeader = '';
+      activeSubpart = null;
       questions.push(currentPassage);
     } else if(qm){
       sawContent = true;
@@ -1220,21 +1257,53 @@ function parseQuestions(text){
       if(current) questions.push(current);
       // qm[1] হলো ওয়ার্ড ফাইলে যেভাবে নাম্বার দেওয়া আছে (অধ্যায়ভিত্তিক হলেও), সেটা রেখে দিচ্ছি —
       // যাতে স্লাইডে গোনার বদলে ফাইলের আসল নাম্বারটাই দেখানো যায়
-      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter, section: currentSection };
+      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter, section: currentSection, sectionHeaderRaw: pendingSectionHeader || null };
+      pendingSectionHeader = '';
+      activeSubpart = null;
     } else if(rm){
       if(!current.statements) current.statements = [];
       current.statements.push({ label: rm[1], text: rm[2].trim() });
+    } else if(wrm){
+      // রোমান নাম্বারিং দিয়ে শুরু হওয়া স্বাধীন "লিখিত" প্রশ্ন (যেমন: i./ii./iii... প্রতিটার
+      // নিজের আলাদা Ans:, কোনো অপশন ছাড়াই) — MCQ স্টেটমেন্ট না, এটা নিজেই একটা নতুন প্রশ্ন
+      sawContent = true;
+      currentPassage = null;
+      if(current) questions.push(current);
+      current = { type: 'short', text: wrm[2].trim(), options: [], answerRaw: '', origNum: wrm[1], chapter: currentChapter, section: currentSection || 'written', sectionHeaderRaw: pendingSectionHeader || null };
+      pendingSectionHeader = '';
+      activeSubpart = null;
     } else if(spm){
       current.statementPrompt = line;
     } else if(om && current){
-      const split = splitInlineOptionsAndAnswer(om[1], om[2]);
-      split.options.forEach(o => current.options.push(o));
-      if(split.answerRaw) current.answerRaw = split.answerRaw;
-      current.type = 'mcq';
+      // এই অপশন-লেবেল লাইনের ঠিক পরের লাইনটাই যদি নিজে একটা "Ans:" হয় (অথবা current আগে
+      // থেকেই এই প্যাটার্নে পড়ে গেছে), তাহলে এটা সাধারণ MCQ অপশন না — বরং প্রতিটা লেবেলের
+      // নিজস্ব উত্তরসহ একটা "মাল্টি-পার্ট লিখিত" প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ, প্রতিটার
+      // আলাদা Ans)। এক্ষেত্রে current.subparts এ আলাদা এন্ট্রি হিসেবে রাখা হচ্ছে, options/answerRaw এ না।
+      const looksLikeOwnAnswerNext = ansRe.test(nextLine);
+      if(current.isMultiPart || (current.options.length === 0 && looksLikeOwnAnswerNext)){
+        current.isMultiPart = true;
+        if(!current.subparts) current.subparts = [];
+        const sp = { label: om[1], text: om[2].trim(), answerRaw: '' };
+        current.subparts.push(sp);
+        activeSubpart = sp;
+      } else {
+        const split = splitInlineOptionsAndAnswer(om[1], om[2]);
+        split.options.forEach(o => current.options.push(o));
+        if(split.answerRaw) current.answerRaw = split.answerRaw;
+        current.type = 'mcq';
+        activeSubpart = null;
+      }
     } else if(am && current){
-      current.answerRaw = am[1].trim();
+      if(current.isMultiPart && activeSubpart){
+        activeSubpart.answerRaw = am[1].trim();
+      } else {
+        current.answerRaw = am[1].trim();
+      }
     } else if(current){
-      if(current.options.length === 0 && !current.answerRaw && !(current.statements && current.statements.length)){
+      if(current.isMultiPart && activeSubpart){
+        if(!activeSubpart.answerRaw){ activeSubpart.text += ' ' + line; }
+        else { activeSubpart.answerRaw += ' ' + line; }
+      } else if(current.options.length === 0 && !current.answerRaw && !(current.statements && current.statements.length)){
         current.text += ' ' + line;
       }
     } else if(currentPassage){
@@ -1319,6 +1388,10 @@ function buildOptsTextareaValue(q){
   if(q.statements && q.statements.length){
     lines = lines.concat(q.statements.map(s => s.label + '. ' + s.text));
     lines.push(q.statementPrompt || 'নিচের কোনটি সঠিক?');
+  }
+  if(q.subparts && q.subparts.length){
+    // মাল্টি-পার্ট লিখিত প্রশ্ন (প্রতিটা উপ-অংশের নিজের Ans সহ) — শুধু দেখার জন্য একসাথে দেখানো হচ্ছে
+    lines = lines.concat(q.subparts.map(sp => sp.label + ') ' + sp.text + (sp.answerRaw ? '   [Ans: ' + sp.answerRaw + ']' : '')));
   }
   lines = lines.concat(q.options);
   return lines.join('\n');
@@ -3013,6 +3086,20 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
       } else if(q.answerRaw){
         slide.addShape('parallelogram', { x:ansX, y:ansY, w:ansShapeW, h:ansShapeH, fill:{color:ansShapeColor}, line:{type:'none'} });
         slide.addText('উত্তর: ' + q.answerRaw, { x:ansX, y:ansY, w:ansShapeW, h:ansShapeH, align:'center', valign:'middle', color:'FFFFFF', bold:true, fontSize:ansFontSize, fontFace:bnFont });
+      } else if(q.subparts && q.subparts.length){
+        // মাল্টি-পার্ট লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ, প্রতিটার নিজের Ans) — প্রতিটা
+        // উপ-অংশ আর তার উত্তর একটার নিচে একটা লাইনে বসছে, প্রশ্নের বক্সের ঠিক নিচ থেকেই
+        const spRuns = [];
+        q.subparts.forEach(sp=>{
+          spRuns.push({ text: sp.label + ') ' + sp.text, options:{ breakLine:true, bold:true } });
+          if(sp.answerRaw) spRuns.push({ text: 'Ans: ' + sp.answerRaw, options:{ breakLine:true, color:optColor } });
+        });
+        slide.addText(spRuns, {
+          x:cX, y:oY, w:cW, h: 6.9 - oY,
+          align:'left', valign:'top', color:qColor,
+          fontSize: Math.min(optFontSize, 16), fontFace:fontForText(q.text,bnFont,enFont),
+          lineSpacing: Math.round(Math.min(optFontSize,16) * optLineSpacing), margin: optBoxMargin
+        });
       }
     }
 
@@ -3313,14 +3400,21 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   let qNumCounter = 0;
   let lastChapter = null;
   parsedQuestions.forEach((q)=>{
-    // এই টুলে অধ্যায়ের নাম প্রতিটা প্রশ্ন/অনুচ্ছেদের সাথেই (q.chapter) জোড়া থাকে —
-    // আগেরটার চেয়ে অধ্যায় পাল্টালে একটা নতুন Section Header বসিয়ে দিচ্ছি
-    if(q.chapter && q.chapter !== lastChapter){
+    // সোর্স ডকে যদি "Written Part 40", "Marketing: ০৮×০১=০৮", "English" এর মতো একটা আলাদা
+    // সেকশন/বিষয় হেডার লাইন পাওয়া যায়, সেটাকে একটা নতুন Google Form পেজের শিরোনাম হিসেবে
+    // বসিয়ে দিচ্ছি — ঠিক ওই হেডারের পরের প্রশ্নগুলোর ঠিক আগে
+    if(q.sectionHeaderRaw){
+      code += '  // সেকশন/বিষয় শিরোনাম\n';
+      code += '  form.addPageBreakItem().setTitle("' + escGs(q.sectionHeaderRaw) + '");\n\n';
+      lastChapter = null; // নতুন সেকশন শুরু হলে অধ্যায়ের নামটাও আবার নতুন করে দেখানো হোক
+    } else if(q.chapter && q.chapter !== lastChapter){
+      // এই টুলে অধ্যায়ের নাম প্রতিটা প্রশ্ন/অনুচ্ছেদের সাথেই (q.chapter) জোড়া থাকে —
+      // আগেরটার চেয়ে অধ্যায় পাল্টালে একটা নতুন Section Header বসিয়ে দিচ্ছি
       code += '  // অধ্যায়/বিষয় শিরোনাম\n';
       code += '  item = form.addSectionHeaderItem();\n';
       code += '  item.setTitle("' + escGs(q.chapter) + '");\n\n';
-      lastChapter = q.chapter;
     }
+    if(q.chapter) lastChapter = q.chapter;
 
     if(q.type === 'passage'){
       // উদ্দীপক/অনুচ্ছেদ — SectionHeaderItem ব্যবহার করা হচ্ছে কারণ এটাতে setPoints/setRequired নেই,
@@ -3345,7 +3439,23 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
       q.statements.forEach(st => { qLabel += '\n' + st.label + '. ' + st.text; });
       qLabel += '\n' + (q.statementPrompt || 'নিচের কোনটি সঠিক?');
     }
-    if(q.type === 'mcq' && q.options.length > 0){
+    if(q.subparts && q.subparts.length){
+      // একাধিক উপ-অংশের লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ) — মূল প্রশ্নটা একটা সেকশন-হেডার,
+      // আর প্রতিটা উপ-অংশ (ক/খ/গ/ঘ বা a/b/c/d) নিজের আলাদা "Long answer" টেক্সটবক্স —
+      // বাধ্যতামূলক না, শিক্ষার্থী চাইলে খালি রেখেও ফর্ম সাবমিট করতে পারবে
+      code += '  item = form.addSectionHeaderItem();\n';
+      code += '  item.setTitle("' + escGs(qLabel) + '");\n\n';
+      q.subparts.forEach(sp=>{
+        const spLabel = sp.label + ') ' + sp.text;
+        code += '  item = form.addParagraphTextItem();\n';
+        code += '  item.setTitle("' + escGs(spLabel) + '").setRequired(false);\n';
+        if(sp.answerRaw){
+          code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সমাধান/উত্তর: ' + escGs(sp.answerRaw) + '").build());\n\n';
+        } else {
+          code += '\n';
+        }
+      });
+    } else if(q.type === 'mcq' && q.options.length > 0){
       const correctIdx = resolveCorrectIndex(q);
       const uniqueOpts = dedupeOptions(q.options);
       const isBn = isBengaliText(q.text) || q.options.some(o=>isBengaliText(o));
@@ -3357,21 +3467,13 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
         code += '    item.createChoice("' + escGs(labeledOpt) + '", ' + (oi === correctIdx ? 'true' : 'false') + ')' + (oi < uniqueOpts.length-1 ? ',' : '') + '\n';
       });
       code += '  ]);\n\n';
-    } else if(q.section === 'written'){
-      // লিখিত/রচনামূলক প্রশ্ন — এক লাইনের বদলে বড় প্যারাগ্রাফ টেক্সটবক্স দেওয়া হচ্ছে,
-      // যাতে শিক্ষার্থী হিসাব/ব্যাখ্যাসহ বিস্তারিত উত্তর লিখতে পারে
+    } else {
+      // লিখিত/সংক্ষিপ্ত প্রশ্ন — বড় প্যারাগ্রাফ টেক্সটবক্স দেওয়া হচ্ছে, বাধ্যতামূলক না —
+      // যাতে শিক্ষার্থী হিসাব/ব্যাখ্যাসহ বিস্তারিত উত্তর লিখতে পারে, না চাইলে খালি রেখেও সাবমিট করতে পারবে
       code += '  item = form.addParagraphTextItem();\n';
-      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(true);\n';
+      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(false);\n';
       if(q.answerRaw){
         code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সমাধান/উত্তর: ' + escGs(q.answerRaw) + '").build());\n\n';
-      } else {
-        code += '\n';
-      }
-    } else {
-      code += '  item = form.addTextItem();\n';
-      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(true);\n';
-      if(q.answerRaw){
-        code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সঠিক উত্তর: ' + escGs(q.answerRaw) + '").build());\n\n';
       } else {
         code += '\n';
       }
