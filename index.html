@@ -397,11 +397,11 @@
       <div class="badge">২</div>
       <div>
         <h2>Word ফাইল আপলোড করুন</h2>
-        <div class="sub">.docx ফাইল সাপোর্ট করে</div>
+        <div class="sub">শুধু .docx ফাইল সাপোর্ট করে (পুরনো .doc ফরম্যাট না)</div>
       </div>
     </div>
     <label class="drop" id="dropZone">
-      <input type="file" id="fileInput" accept=".docx" multiple>
+      <input type="file" id="fileInput" accept=".docx,.doc" multiple>
       <div class="drop-icon">📄</div>
       <div><b>ফাইল বেছে নিন</b> অথবা এখানে টেনে আনুন</div>
       <div style="font-size:12px;color:var(--chalk-dim);margin-top:4px;">একসাথে একাধিক .docx ফাইলও দেওয়া যাবে — সবগুলোর প্রশ্ন একটাই তালিকায় জোড়া লাগবে</div>
@@ -1027,6 +1027,28 @@ function handleFiles(fileList){
     ? files[0].name
     : (toBnNumber(files.length) + 'টি ফাইল: ' + files.map(f=>f.name).join(', '));
 
+  // পুরনো .doc ফরম্যাট (Word 97-2003, বাইনারি) mammoth দিয়ে পড়া যায় না — mammoth শুধু নতুন
+  // .docx (XML-ভিত্তিক) ফরম্যাট সাপোর্ট করে। .doc ফাইল দিলে mammoth একটা দুর্বোধ্য এরর দেয়
+  // ("Cannot read properties of undefined (reading 'children')"), তাই আগে থেকেই এক্সটেনশন
+  // দেখে পরিষ্কার বাংলা মেসেজ দেখানো হচ্ছে, drag-and-drop এ accept ফিল্টার এড়িয়ে গেলেও যেন ধরা পড়ে
+  const oldDocFiles = files.filter(f => /\.doc$/i.test(f.name) && !/\.docx$/i.test(f.name));
+  if(oldDocFiles.length){
+    alert(
+      'এই ফাইল(গুলো) পুরনো Word ফরম্যাটে (.doc) আছে — এই টুল শুধু নতুন .docx ফরম্যাট সাপোর্ট করে:\n' +
+      oldDocFiles.map(f=>'• ' + f.name).join('\n') +
+      '\n\n.docx তে কনভার্ট করতে:\n' +
+      '১. ফাইলটা Microsoft Word দিয়ে খুলুন, তারপর "Save As" থেকে ফরম্যাট ".docx" বেছে সেভ করুন।\n' +
+      '   (অথবা Google Docs-এ আপলোড করে ওপেন করুন, তারপর File → Download → Microsoft Word (.docx))\n' +
+      '২. এরপর নতুন .docx ফাইলটা এখানে আপলোড করুন।'
+    );
+    return;
+  }
+  const unsupportedFiles = files.filter(f => !/\.docx$/i.test(f.name));
+  if(unsupportedFiles.length){
+    alert('এই ফাইল(গুলো) সাপোর্ট করা হয় না, শুধু .docx ফাইল দিন:\n' + unsupportedFiles.map(f=>'• ' + f.name).join('\n'));
+    return;
+  }
+
   Promise.all(files.map(f=>getRawTextFromFile(f).catch(err=>{
     throw new Error(f.name + ' — ' + err.message);
   })))
@@ -1190,9 +1212,21 @@ function parseQuestions(text){
     if(!line) return false;
     if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line)) return false;
     if(passageRe.test(line) || chapterHeadingTestRe.test(line)) return false;
+    // "ব্যাখ্যা:"/"Explanation:" দিয়ে শুরু হওয়া লাইনগুলো আসলে আগের প্রশ্নের ব্যাখ্যা —
+    // এগুলোকে ভুল করে পরের প্রশ্নের বিষয়-হেডার বলে ধরে ফেলে যেন না
+    if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)) return false;
     if(/[?？]\s*$/.test(line)) return false;
+    // সমীকরণ/অনুপাত/হিসাবের লাইন (যেমন "= ১৫ : ৬ : ৭", "৩০,০০০ - ৬,০০০") বাদ দেওয়া হচ্ছে —
+    // এগুলো আসলে ব্যাখ্যা/হিসাবের অংশ, কোনো বিষয়ের নাম না। পুরো লাইনটা যদি শুধু সংখ্যা/চিহ্ন/
+    // দাঁড়ি দিয়েই তৈরি হয় (কোনো অক্ষর নেই), অথবা লাইনটা "="/"+"/"×"/"÷" দিয়ে শুরু হয়, বাদ দেওয়া হবে
+    if(/^[=+\-–—×÷*/(),.:।\s০-৯0-9]+$/.test(line)) return false;
+    if(/^[=+×÷]/.test(line)) return false;
     const wordCount = line.split(/\s+/).filter(Boolean).length;
     if(wordCount > 8 || line.length > 60) return false;
+    // অন্তত একটা বর্ণ-ভিত্তিক শব্দ থাকতে হবে (যেমন "Marketing", "English", "Written") —
+    // নাহলে সংখ্যা/চিহ্ননির্ভর লাইনকে ভুল করে বিষয়ের নাম বলে ধরে ফেলবে
+    const letterWordCount = line.split(/\s+/).filter(w => /[a-zA-Zঅ-হড়ঢ়য়ৎ]/.test(w)).length;
+    if(letterWordCount < 1) return false;
     return true;
   };
   const headerLineFlags = lines.map((line, idx)=>{
@@ -3404,9 +3438,13 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
     // সেকশন/বিষয় হেডার লাইন পাওয়া যায়, সেটাকে একটা নতুন Google Form পেজের শিরোনাম হিসেবে
     // বসিয়ে দিচ্ছি — ঠিক ওই হেডারের পরের প্রশ্নগুলোর ঠিক আগে
     if(q.sectionHeaderRaw){
-      code += '  // সেকশন/বিষয় শিরোনাম\n';
-      code += '  form.addPageBreakItem().setTitle("' + escGs(q.sectionHeaderRaw) + '");\n\n';
-      lastChapter = null; // নতুন সেকশন শুরু হলে অধ্যায়ের নামটাও আবার নতুন করে দেখানো হোক
+      // form.addPageBreakItem() ব্যবহার করলে Google Form-এ আলাদা "Section X of Y" পেজ তৈরি হয়ে
+      // যেত (নেভিগেশন ড্রপডাউনসহ) — সেটা চাওয়া হয়নি। তার বদলে addSectionHeaderItem() ব্যবহার
+      // করা হচ্ছে, যেটা শুধু একটা শিরোনাম + "Description (optional)" হিসেবে বসে, পেজ ভাঙে না
+      code += '  // বিষয়ের শিরোনাম (ডেসক্রিপশন হিসেবে, নতুন পেজ/সেকশন তৈরি হচ্ছে না)\n';
+      code += '  item = form.addSectionHeaderItem();\n';
+      code += '  item.setTitle("' + escGs(q.sectionHeaderRaw) + '");\n\n';
+      lastChapter = null; // নতুন বিষয় শুরু হলে অধ্যায়ের নামটাও আবার নতুন করে দেখানো হোক
     } else if(q.chapter && q.chapter !== lastChapter){
       // এই টুলে অধ্যায়ের নাম প্রতিটা প্রশ্ন/অনুচ্ছেদের সাথেই (q.chapter) জোড়া থাকে —
       // আগেরটার চেয়ে অধ্যায় পাল্টালে একটা নতুন Section Header বসিয়ে দিচ্ছি
