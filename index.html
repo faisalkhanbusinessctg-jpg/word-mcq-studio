@@ -1211,7 +1211,7 @@ function parseQuestions(text){
   const isHeaderCandidate = (line) => {
     if(!line) return false;
     if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line)) return false;
-    if(passageRe.test(line) || chapterHeadingTestRe.test(line)) return false;
+    if(passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line)) return false;
     // "ব্যাখ্যা:"/"Explanation:" দিয়ে শুরু হওয়া লাইনগুলো আসলে আগের প্রশ্নের ব্যাখ্যা —
     // এগুলোকে ভুল করে পরের প্রশ্নের বিষয়-হেডার বলে ধরে ফেলে যেন না
     if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)) return false;
@@ -1229,7 +1229,18 @@ function parseQuestions(text){
     if(letterWordCount < 1) return false;
     return true;
   };
+  // "ব্যাখ্যা:" লাইনের পরে প্রায়ই আরো ২-৩টা লাইনে ব্যাখ্যাটা চলতে থাকে, কিন্তু ওই পরের লাইনগুলোতে
+  // "ব্যাখ্যা:" শব্দটা আর থাকে না — শুধু isHeaderCandidate দিয়ে চেক করলে ব্যাখ্যার একদম শেষ লাইনটা
+  // (যেটার ঠিক পরেই পরের প্রশ্ন শুরু হয়) ভুল করে বিষয়-হেডার বলে ধরে ফেলতো। তাই এখানে একটা
+  // "ব্যাখ্যা চলছে" স্টেট রাখা হচ্ছে — নতুন প্রশ্ন/অপশন/উত্তর/হেডিং না আসা পর্যন্ত সেই স্টেটে
+  // থাকা কোনো লাইনকেই হেডার-প্রার্থী হিসেবে গণ্য করা হবে না
+  let __inExplanation = false;
   const headerLineFlags = lines.map((line, idx)=>{
+    if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)){ __inExplanation = true; return false; }
+    if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line) || passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line)){
+      __inExplanation = false;
+    }
+    if(__inExplanation) return false;
     if(!isHeaderCandidate(line)) return false;
     const next = lines[idx+1];
     return !!(next && (qRe.test(next) || romanRe.test(next)));
