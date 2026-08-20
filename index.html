@@ -491,14 +491,14 @@
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
         <input type="checkbox" id="coverSlideEnable" checked> সবার আগে একটা কভার/টাইটেল স্লাইড যোগ করুন
       </label>
-      <div class="sub" style="margin-bottom:10px;">কালো ব্যাকগ্রাউন্ডে কমলা গোল-কোণা বর্ডার বক্সের ভেতর হলুদ বোল্ড লেখা — নিচের সেশন ফিল্ডে যা লিখবেন সেটা স্বয়ংক্রিয়ভাবে "শিক্ষাবর্ষ:" হিসেবে দেখাবে।</div>
+      <div class="sub" style="margin-bottom:10px;">কালো ব্যাকগ্রাউন্ডে কমলা গোল-কোণা বর্ডার বক্সের ভেতর হলুদ বোল্ড লেখা। ডকে যদি "সেশন ২০২৫-২৬"/"শিক্ষাবর্ষ ২০২৪-২৫" এর মতো একাধিক হেডিং থাকে (একসাথে একাধিক বছরের প্রশ্ন), প্রতিটার আগে নিজে থেকেই আলাদা কভার স্লাইড বসবে। এমন কোনো হেডিং না পেলে নিচের সেশন ফিল্ডে যা লিখবেন সেটাই একবার ব্যবহার হবে।</div>
       <div class="row" style="gap:16px;">
         <div style="flex:1;min-width:220px;">
           <label>উপরের লাইন (প্রতিষ্ঠান/ইউনিট)</label>
           <input type="text" id="coverTitleText" value="ঢাকা বিশ্ববিদ্যালয়, গ-ইউনিট">
         </div>
         <div style="flex:1;min-width:180px;">
-          <label>সেশন (শিক্ষাবর্ষ)</label>
+          <label>সেশন (শিক্ষাবর্ষ) — ফলব্যাক</label>
           <input type="text" id="coverSessionText" value="২০২৫-২০২৬" placeholder="যেমন: ২০২৫-২০২৬">
         </div>
       </div>
@@ -812,7 +812,18 @@
     </div>
     <div class="field">
       <label>বিবরণ (ঐচ্ছিক)</label>
+      <div class="sub" style="margin-bottom:6px;">নিচে একটা ডিফল্ট নোটিশ-টেক্সট বসানো আছে (প্রিসেট হিসেবে) — চাইলে বদলে ফেলুন, অথবা "নতুন প্রিসেট সেভ করুন" দিয়ে নিজের লেখা টেক্সটকেও পরের বার ব্যবহারের জন্য সেভ করে রাখতে পারবেন।</div>
+      <div class="row" style="gap:8px;margin-bottom:8px;">
+        <select id="formDescPresetSelect" style="flex:1;min-width:200px;"></select>
+        <button type="button" id="saveDescPresetBtn">💾 নতুন প্রিসেট সেভ করুন</button>
+        <button type="button" id="deleteDescPresetBtn">🗑️ এই প্রিসেট মুছুন</button>
+      </div>
       <textarea id="formDesc" placeholder="যেমন: প্রথম অধ্যায় — MCQ পরীক্ষা"></textarea>
+    </div>
+    <div class="field">
+      <label>ফর্মের উপরে হেডার ইমেজ (ঐচ্ছিক — ছবির লিংক/URL)</label>
+      <input type="text" id="formHeaderImageUrl" placeholder="https://... (সরাসরি ছবির লিংক)">
+      <div class="sub" style="margin-top:6px;">দিলে জেনারেট করা কোড ফর্মের উপরে এই ছবিটা হেডার হিসেবে বসিয়ে দেবে। খালি রাখলে, জেনারেট করার পর আপনি চাইলে Google Form থেকেই ম্যানুয়ালি ছবি যোগ করতে পারবেন (Customize theme → Add photo)।</div>
     </div>
     <div class="field">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -1201,6 +1212,12 @@ function parseQuestions(text){
   // পরের সেকশন-হেডিং না আসা পর্যন্ত সেই সেকশনের (written/mcq) বলে গণ্য হবে।
   const sectionHeadingRe = /^(?:written|mcq|লিখিত|রচনামূলক|বহুনির্বাচনী)\s*(?:অংশ|part)?\s*[-–—:।]?\s*[০-৯0-9]*\s*$/i;
   let currentSection = '';
+  // "সেশন ২০২৫-২৬", "সেশন: ২০২৪-২৫", "শিক্ষাবর্ষ ২০২৪-২০২৫" — একই ডকে একাধিক শিক্ষাবর্ষের
+  // প্রশ্নসেট থাকলে (যেমন গত ৫ বছরের প্রশ্ন একসাথে), প্রতিটা সেশনের প্রশ্ন শুরুর আগে এইরকম
+  // একটা হেডিং লাইন থাকে। এটা ধরে রেখে পরের প্রশ্নের সাথে ট্যাগ করে দেওয়া হচ্ছে, যাতে PPTX
+  // জেনারেট করার সময় প্রতিটা সেশনের আগে আলাদা "শিক্ষাবর্ষ:" কভার স্লাইড বসানো যায়
+  const sessionHeadingRe = /^(?:সেশন|শিক্ষাবর্ষ)\s*[:ঃ\-–—]?\s*(২০[০-৯]{2}\s*[-–—]\s*(?:২০)?[০-৯]{2})\s*$/u;
+  let pendingSession = '';
   // "Written Part 40", "Marketing: ০৮×০১=০৮", "Management: 08*01 = 08", "English" — এইরকম
   // ছোট, একলাইনের বিষয়/সেকশন-হেডার লাইন প্রায়ই ডকুমেন্টে থাকে যেটা নিজে কোনো প্রশ্ন/অপশন/উত্তর না,
   // বরং ঠিক পরের প্রশ্ন-ব্লকের একটা শিরোনাম। sectionHeadingRe শুধু "written/mcq/লিখিত" গোছের
@@ -1211,7 +1228,7 @@ function parseQuestions(text){
   const isHeaderCandidate = (line) => {
     if(!line) return false;
     if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line)) return false;
-    if(passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line)) return false;
+    if(passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line) || sessionHeadingRe.test(line)) return false;
     // "ব্যাখ্যা:"/"Explanation:" দিয়ে শুরু হওয়া লাইনগুলো আসলে আগের প্রশ্নের ব্যাখ্যা —
     // এগুলোকে ভুল করে পরের প্রশ্নের বিষয়-হেডার বলে ধরে ফেলে যেন না
     if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)) return false;
@@ -1237,7 +1254,7 @@ function parseQuestions(text){
   let __inExplanation = false;
   const headerLineFlags = lines.map((line, idx)=>{
     if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)){ __inExplanation = true; return false; }
-    if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line) || passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line)){
+    if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line) || passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line) || sessionHeadingRe.test(line)){
       __inExplanation = false;
     }
     if(__inExplanation) return false;
@@ -1255,6 +1272,16 @@ function parseQuestions(text){
       // এই লাইনটা একটা বিষয়/সেকশন হেডার (যেমন "English", "Marketing: ০৮×০১=০৮") —
       // পরের প্রশ্নের সাথে এটা জুড়ে দেওয়া হবে (Google Form-এ আলাদা পেজ/সেকশন হিসেবে দেখানোর জন্য)
       pendingSectionHeader = line;
+      continue;
+    }
+    if(sessionHeadingRe.test(line)){
+      // "সেশন ২০২৫-২৬" এর মতো লাইন — এই মানটা currentChapter হিসেবেও রাখা হচ্ছে (হেডার বারে
+      // দেখানোর জন্য), আর pendingSession এ আলাদা করে রাখা হচ্ছে যাতে পরের প্রশ্নের সাথে ট্যাগ
+      // করে PPTX জেনারেট করার সময় এর ঠিক আগে একটা "শিক্ষাবর্ষ:" কভার স্লাইড বসানো যায়
+      const sm = line.match(sessionHeadingRe);
+      const sessionVal = sm[1].replace(/\s+/g,'');
+      currentChapter = sessionVal;
+      pendingSession = sessionVal;
       continue;
     }
     if(sectionHeadingRe.test(line)){
@@ -1292,8 +1319,9 @@ function parseQuestions(text){
     if(pm){
       sawContent = true;
       if(current){ questions.push(current); current = null; }
-      currentPassage = { type:'passage', text: line, body: '', options: [], answerRaw: '', chapter: currentChapter, sectionHeaderRaw: pendingSectionHeader || null };
+      currentPassage = { type:'passage', text: line, body: '', options: [], answerRaw: '', chapter: currentChapter, sectionHeaderRaw: pendingSectionHeader || null, newSession: pendingSession || null };
       pendingSectionHeader = '';
+      pendingSession = '';
       activeSubpart = null;
       questions.push(currentPassage);
     } else if(qm){
@@ -1302,8 +1330,9 @@ function parseQuestions(text){
       if(current) questions.push(current);
       // qm[1] হলো ওয়ার্ড ফাইলে যেভাবে নাম্বার দেওয়া আছে (অধ্যায়ভিত্তিক হলেও), সেটা রেখে দিচ্ছি —
       // যাতে স্লাইডে গোনার বদলে ফাইলের আসল নাম্বারটাই দেখানো যায়
-      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter, section: currentSection, sectionHeaderRaw: pendingSectionHeader || null };
+      current = { type: 'short', text: qm[2].trim(), options: [], answerRaw: '', origNum: qm[1], chapter: currentChapter, section: currentSection, sectionHeaderRaw: pendingSectionHeader || null, newSession: pendingSession || null };
       pendingSectionHeader = '';
+      pendingSession = '';
       activeSubpart = null;
     } else if(rm){
       if(!current.statements) current.statements = [];
@@ -1314,8 +1343,9 @@ function parseQuestions(text){
       sawContent = true;
       currentPassage = null;
       if(current) questions.push(current);
-      current = { type: 'short', text: wrm[2].trim(), options: [], answerRaw: '', origNum: wrm[1], chapter: currentChapter, section: currentSection || 'written', sectionHeaderRaw: pendingSectionHeader || null };
+      current = { type: 'short', text: wrm[2].trim(), options: [], answerRaw: '', origNum: wrm[1], chapter: currentChapter, section: currentSection || 'written', sectionHeaderRaw: pendingSectionHeader || null, newSession: pendingSession || null };
       pendingSectionHeader = '';
+      pendingSession = '';
       activeSubpart = null;
     } else if(spm){
       current.statementPrompt = line;
@@ -1776,6 +1806,75 @@ function applyNoteConfigToUI(){
   if(negValEl) negValEl.value = cfg.negativeValue || '0.25';
 }
 applyNoteConfigToUI();
+
+// ============ ফর্মের বিবরণ (Description) প্রিসেট — বারবার ব্যবহারের জন্য সেভ করে রাখা যায় ============
+const DESC_PRESETS_STORAGE_KEY = 'wpmMcqStudio_descPresets_v1';
+const DEFAULT_DESC_PRESET_NAME = 'পরীক্ষার নোটিশ (ডিফল্ট)';
+const DEFAULT_DESC_PRESET_TEXT =
+'প্রিয় শিক্ষার্থীরা, আশা করি সকলে যথাযথ ভাবে প্রস্তুতি নিয়ে আজকে পরীক্ষায় অংশগ্রহণ করেছো। পরীক্ষার সময় কিছু দৃষ্টিভঙ্গি: আজকে MCQ অংশ এই গুগুল ফর্ম থেকে প্রতিদিনের ন্যায় পরীক্ষা দিবে। পরীক্ষা শেষে গুগল ফর্মটি অবশ্যই SUBMIT করবে। লিখিত অংশে উত্তর তোমরা তোমাদের খাতায় নির্দিষ্ট সময়ের মধ্যে লিখে ঐ উত্তরপত্রের ছবি তুলে CamScaner এর মাধ্যমে PDF করে আমাদের টেলিগ্রাম গ্রুপে পাঠিয়ে দেওয়ার অনুরোধ রইল। [বি.দ্র: খাতায় অবশ্যই তোমার ফোকাসের/ বিজনেস টাইটানের রোল, নাম এবং পরিক্ষার বিষয় লিখবে।]\n\nপূর্ণমান: ১০০, সময়: ১ ঘন্টা ৩০ মিনিট';
+
+function loadDescPresets(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(DESC_PRESETS_STORAGE_KEY) || 'null');
+    if(saved && Array.isArray(saved) && saved.length) return saved;
+  }catch(e){}
+  return [{ name: DEFAULT_DESC_PRESET_NAME, text: DEFAULT_DESC_PRESET_TEXT }];
+}
+function saveDescPresets(presets){
+  try{ localStorage.setItem(DESC_PRESETS_STORAGE_KEY, JSON.stringify(presets)); }catch(e){}
+}
+let descPresets = loadDescPresets();
+function renderDescPresetSelect(selectedName){
+  const sel = document.getElementById('formDescPresetSelect');
+  if(!sel) return;
+  sel.innerHTML = '';
+  descPresets.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  if(selectedName) sel.value = selectedName;
+}
+renderDescPresetSelect(DEFAULT_DESC_PRESET_NAME);
+// পেজ লোড হওয়ার সময় ডিফল্ট প্রিসেটটাই বিবরণ বক্সে বসিয়ে দেওয়া হচ্ছে (automatic)
+document.getElementById('formDesc').value = descPresets[0].text;
+
+const formDescPresetSelectEl = document.getElementById('formDescPresetSelect');
+if(formDescPresetSelectEl){
+  formDescPresetSelectEl.addEventListener('change', ()=>{
+    const p = descPresets.find(pr => pr.name === formDescPresetSelectEl.value);
+    if(p) document.getElementById('formDesc').value = p.text;
+  });
+}
+const saveDescPresetBtnEl = document.getElementById('saveDescPresetBtn');
+if(saveDescPresetBtnEl){
+  saveDescPresetBtnEl.addEventListener('click', ()=>{
+    const text = document.getElementById('formDesc').value;
+    if(!text.trim()) return;
+    const name = prompt('এই প্রিসেটের একটা নাম দিন:', '');
+    if(!name || !name.trim()) return;
+    const trimmedName = name.trim();
+    const existingIdx = descPresets.findIndex(p => p.name === trimmedName);
+    if(existingIdx !== -1) descPresets[existingIdx].text = text;
+    else descPresets.push({ name: trimmedName, text });
+    saveDescPresets(descPresets);
+    renderDescPresetSelect(trimmedName);
+    showToast('প্রিসেট সেভ হয়েছে ✓');
+  });
+}
+const deleteDescPresetBtnEl = document.getElementById('deleteDescPresetBtn');
+if(deleteDescPresetBtnEl){
+  deleteDescPresetBtnEl.addEventListener('click', ()=>{
+    if(descPresets.length <= 1) return;
+    const sel = document.getElementById('formDescPresetSelect');
+    const name = sel.value;
+    descPresets = descPresets.filter(p => p.name !== name);
+    saveDescPresets(descPresets);
+    renderDescPresetSelect(descPresets[0].name);
+    document.getElementById('formDesc').value = descPresets[0].text;
+  });
+}
 
 function formatNum(n){
   if(!Number.isFinite(n)) return '0';
@@ -2904,8 +3003,11 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
   pptx.defineLayout({ name: 'WIDE', width: 13.333, height: 7.5 });
   pptx.layout = 'WIDE';
 
-  // কভার/টাইটেল স্লাইড — কালো ব্যাকগ্রাউন্ডে কমলা বর্ডার বক্স, ভেতরে হলুদ বোল্ড আন্ডারলাইন করা লেখা
-  if(coverSlideEnable && (coverTitleText || coverSessionText)){
+  // কভার/টাইটেল স্লাইড — কালো ব্যাকগ্রাউন্ডে কমলা বর্ডার বক্স, ভেতরে হলুদ বোল্ড আন্ডারলাইন করা লেখা।
+  // ডকে যদি একাধিক "সেশন ২০২৫-২৬" জাতীয় হেডিং অটো-ডিটেক্ট হয়ে থাকে (একই ডকে একাধিক বছরের
+  // প্রশ্নসেট একসাথে থাকলে), প্রতিটা সেশনের প্রথম প্রশ্নের ঠিক আগে আলাদা আলাদা কভার স্লাইড বসবে —
+  // ম্যানুয়াল সেশন ফিল্ডটা তখন শুধু ফলব্যাক হিসেবে থাকবে (একটাও অটো-ডিটেক্ট না হলে সেটাই ব্যবহার হবে)
+  function addCoverSlide(sessionVal){
     const coverSlide = pptx.addSlide();
     coverSlide.background = { color: '000000' };
     coverSlide.addShape('roundRect', {
@@ -2918,12 +3020,16 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
         fontFace:bnFont, fontSize:32, bold:true, color:YELLOW, underline:{ style:'sng' }
       });
     }
-    if(coverSessionText){
-      coverSlide.addText('শিক্ষাবর্ষ: ' + coverSessionText, {
+    if(sessionVal){
+      coverSlide.addText('শিক্ষাবর্ষ: ' + sessionVal, {
         x:1.3, y:3.65, w:10.73, h:0.75, align:'center', valign:'middle',
         fontFace:bnFont, fontSize:26, bold:true, color:YELLOW, underline:{ style:'sng' }
       });
     }
+  }
+  const hasAutoSessions = parsedQuestions.some(q => q.newSession);
+  if(coverSlideEnable && !hasAutoSessions && (coverTitleText || coverSessionText)){
+    addCoverSlide(coverSessionText);
   }
 
   // প্রশ্নগুলোকে স্লাইড-গ্রুপে ভাগ করা হচ্ছে — MCQ/সাধারণ প্রশ্ন আগের মতোই একটা করে স্লাইডে,
@@ -2933,6 +3039,10 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
     let writtenBuf = [];
     const flushWritten = () => { if(writtenBuf.length){ slideGroups.push(writtenBuf); writtenBuf = []; } };
     parsedQuestions.forEach(q=>{
+      // নতুন সেশন শুরু হলে আগের ব্যাচটা এখানেই ভেঙে দেওয়া হচ্ছে — নাহলে আগের সেশনের শেষ ১-২টা
+      // লিখিত প্রশ্নের সাথে নতুন সেশনের প্রথম প্রশ্নটা একই স্লাইড-গ্রুপে মিশে যেতে পারে, আর তখন
+      // কভার স্লাইডটা ভুল জায়গায় (গ্রুপের মাঝখানে না দেখিয়ে) বসে যাবে
+      if(q.newSession) flushWritten();
       if(q.section === 'written' && q.type !== 'passage'){
         writtenBuf.push(q);
         if(writtenBuf.length === 3) flushWritten();
@@ -2947,6 +3057,9 @@ document.getElementById('generateBtn').addEventListener('click', ()=>{
   let qNumCounter = 0;
   slideGroups.forEach((grp)=>{
     const q = grp[0];
+    if(coverSlideEnable && q.newSession){
+      addCoverSlide(q.newSession);
+    }
     const isWrittenBatch = q.section === 'written' && q.type !== 'passage';
     const slide = pptx.addSlide();
 
@@ -3410,6 +3523,7 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   const customDesc = document.getElementById('formDesc').value.trim();
   const autoNoteEnabled = document.getElementById('gformAutoNote') ? document.getElementById('gformAutoNote').checked : false;
   const desc = [customDesc, autoNoteEnabled ? buildAutoNote() : ''].filter(Boolean).join('\n\n');
+  const headerImageUrl = document.getElementById('formHeaderImageUrl') ? document.getElementById('formHeaderImageUrl').value.trim() : '';
   const defaultPointsEl = document.getElementById('gformPoints');
   const defaultPoints = defaultPointsEl ? (parseFloat(defaultPointsEl.value) || 0) : 1;
   const shuffleQuestions = document.getElementById('gformShuffle') ? document.getElementById('gformShuffle').checked : false;
@@ -3418,6 +3532,10 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   code += '/**\n';
   code += ' * এই কোডটি script.google.com এ পেস্ট করে Run করুন।\n';
   code += ' * এটি স্বয়ংক্রিয়ভাবে একটি Google Form Quiz তৈরি করবে।\n';
+  code += ' *\n';
+  code += ' * বি.দ্র: ফন্ট/ফন্ট-সাইজ (Oswald, Header 24 / Question 18 / Text 12) Google Apps Script দিয়ে\n';
+  code += ' * সেট করা যায় না — এটা ফর্ম খুলে উপরে-ডানে পেইন্ট-রোলার আইকন (Customize theme) থেকে\n';
+  code += ' * ম্যানুয়ালি একবার সেট করে নিতে হবে।\n';
   code += ' */\n';
   code += 'function createFormFromData() {\n';
   code += '  var form = FormApp.create(' + JSON.stringify(title) + ');\n';
@@ -3427,6 +3545,16 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   if(shuffleQuestions) code += '  form.setShuffleQuestions(true);\n';
   if(desc) code += '  form.setDescription(' + JSON.stringify(desc) + ');\n';
   code += '  var item;\n\n';
+
+  if(headerImageUrl){
+    // থিমের আসল হেডার-ব্যানার (Customize theme) স্ক্রিপ্ট দিয়ে সেট করা যায় না — তাই এটা ফর্মের
+    // একদম প্রথম আইটেম হিসেবে ছবিটা বসিয়ে দিচ্ছে, যেটা দেখতে হেডারের কাছাকাছি লাগবে
+    code += '  // হেডার ইমেজ (ফর্মের প্রথম আইটেম হিসেবে)\n';
+    code += '  try {\n';
+    code += '    var headerImg = UrlFetchApp.fetch(' + JSON.stringify(headerImageUrl) + ');\n';
+    code += '    form.addImageItem().setImage(headerImg);\n';
+    code += '  } catch (e) { Logger.log("হেডার ছবি বসাতে সমস্যা হয়েছে: " + e); }\n\n';
+  }
 
   code += '  // শিক্ষার্থীর তথ্য (সেটিংসে যা যা টিক দেওয়া আছে)\n';
   const activeStudentFields = [...studentFieldsState.fields, ...studentFieldsState.custom].filter(f=>f.included);
@@ -3490,19 +3618,15 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
     }
     if(q.subparts && q.subparts.length){
       // একাধিক উপ-অংশের লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ) — মূল প্রশ্নটা একটা সেকশন-হেডার,
-      // আর প্রতিটা উপ-অংশ (ক/খ/গ/ঘ বা a/b/c/d) নিজের আলাদা "Long answer" টেক্সটবক্স —
-      // বাধ্যতামূলক না, শিক্ষার্থী চাইলে খালি রেখেও ফর্ম সাবমিট করতে পারবে
+      // আর প্রতিটা উপ-অংশ (ক/খ/গ/ঘ বা a/b/c/d) নিজের আলাদা "Short answer" টেক্সটবক্স — বাধ্যতামূলক
+      // না, কোনো পয়েন্ট/মার্কস বসছে না, আর Word ফাইলে উত্তর থাকলেও সেটা ফর্মে দেখানো হচ্ছে না —
+      // শুধু প্রশ্নটাই থাকছে (শিক্ষার্থীর কাছে উত্তর প্রকাশ পাওয়া ঠিক না)
       code += '  item = form.addSectionHeaderItem();\n';
       code += '  item.setTitle("' + escGs(qLabel) + '");\n\n';
       q.subparts.forEach(sp=>{
         const spLabel = sp.label + ') ' + sp.text;
         code += '  item = form.addParagraphTextItem();\n';
-        code += '  item.setTitle("' + escGs(spLabel) + '").setRequired(false);\n';
-        if(sp.answerRaw){
-          code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সমাধান/উত্তর: ' + escGs(sp.answerRaw) + '").build());\n\n';
-        } else {
-          code += '\n';
-        }
+        code += '  item.setTitle("' + escGs(spLabel) + '").setRequired(false);\n\n';
       });
     } else if(q.type === 'mcq' && q.options.length > 0){
       const correctIdx = resolveCorrectIndex(q);
@@ -3517,15 +3641,11 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
       });
       code += '  ]);\n\n';
     } else {
-      // লিখিত/সংক্ষিপ্ত প্রশ্ন — বড় প্যারাগ্রাফ টেক্সটবক্স দেওয়া হচ্ছে, বাধ্যতামূলক না —
-      // যাতে শিক্ষার্থী হিসাব/ব্যাখ্যাসহ বিস্তারিত উত্তর লিখতে পারে, না চাইলে খালি রেখেও সাবমিট করতে পারবে
+      // লিখিত/সংক্ষিপ্ত প্রশ্ন — বড় প্যারাগ্রাফ টেক্সটবক্স দেওয়া হচ্ছে, বাধ্যতামূলক না, কোনো
+      // পয়েন্ট/মার্কস বসছে না (চাইলে পরে নিজে ম্যানুয়ালি যোগ করা যাবে), আর Word ফাইলে উত্তর
+      // থাকলেও সেটা ফর্মে দেখানো হচ্ছে না — শুধু প্রশ্নটাই থাকছে
       code += '  item = form.addParagraphTextItem();\n';
-      code += '  item.setTitle("' + escGs(qLabel) + '").setPoints(' + points + ').setRequired(false);\n';
-      if(q.answerRaw){
-        code += '  item.setGeneralFeedback(FormApp.createFeedback().setText("সমাধান/উত্তর: ' + escGs(q.answerRaw) + '").build());\n\n';
-      } else {
-        code += '\n';
-      }
+      code += '  item.setTitle("' + escGs(qLabel) + '").setRequired(false);\n\n';
     }
   });
 
