@@ -821,11 +821,6 @@
       <textarea id="formDesc" placeholder="যেমন: প্রথম অধ্যায় — MCQ পরীক্ষা"></textarea>
     </div>
     <div class="field">
-      <label>ফর্মের উপরে হেডার ইমেজ (ঐচ্ছিক — ছবির লিংক/URL)</label>
-      <input type="text" id="formHeaderImageUrl" placeholder="https://... (সরাসরি ছবির লিংক)">
-      <div class="sub" style="margin-top:6px;">দিলে জেনারেট করা কোড ফর্মের উপরে এই ছবিটা হেডার হিসেবে বসিয়ে দেবে। খালি রাখলে, জেনারেট করার পর আপনি চাইলে Google Form থেকেই ম্যানুয়ালি ছবি যোগ করতে পারবেন (Customize theme → Add photo)।</div>
-    </div>
-    <div class="field">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
         <input type="checkbox" id="gformAutoNote"> স্বয়ংক্রিয়ভাবে মার্কিং/সময়ের নোট যোগ করুন
       </label>
@@ -3523,7 +3518,6 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   const customDesc = document.getElementById('formDesc').value.trim();
   const autoNoteEnabled = document.getElementById('gformAutoNote') ? document.getElementById('gformAutoNote').checked : false;
   const desc = [customDesc, autoNoteEnabled ? buildAutoNote() : ''].filter(Boolean).join('\n\n');
-  const headerImageUrl = document.getElementById('formHeaderImageUrl') ? document.getElementById('formHeaderImageUrl').value.trim() : '';
   const defaultPointsEl = document.getElementById('gformPoints');
   const defaultPoints = defaultPointsEl ? (parseFloat(defaultPointsEl.value) || 0) : 1;
   const shuffleQuestions = document.getElementById('gformShuffle') ? document.getElementById('gformShuffle').checked : false;
@@ -3546,16 +3540,6 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
   if(desc) code += '  form.setDescription(' + JSON.stringify(desc) + ');\n';
   code += '  var item;\n\n';
 
-  if(headerImageUrl){
-    // থিমের আসল হেডার-ব্যানার (Customize theme) স্ক্রিপ্ট দিয়ে সেট করা যায় না — তাই এটা ফর্মের
-    // একদম প্রথম আইটেম হিসেবে ছবিটা বসিয়ে দিচ্ছে, যেটা দেখতে হেডারের কাছাকাছি লাগবে
-    code += '  // হেডার ইমেজ (ফর্মের প্রথম আইটেম হিসেবে)\n';
-    code += '  try {\n';
-    code += '    var headerImg = UrlFetchApp.fetch(' + JSON.stringify(headerImageUrl) + ');\n';
-    code += '    form.addImageItem().setImage(headerImg);\n';
-    code += '  } catch (e) { Logger.log("হেডার ছবি বসাতে সমস্যা হয়েছে: " + e); }\n\n';
-  }
-
   code += '  // শিক্ষার্থীর তথ্য (সেটিংসে যা যা টিক দেওয়া আছে)\n';
   const activeStudentFields = [...studentFieldsState.fields, ...studentFieldsState.custom].filter(f=>f.included);
   activeStudentFields.forEach(f=>{
@@ -3572,11 +3556,25 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
 
   let qNumCounter = 0;
   let lastChapter = null;
+  // লিখিত অংশের প্রশ্নগুলো (রোমান-নাম্বার করা প্রশ্ন হোক বা a/b/c/d সাব-পার্ট অনুবাদ প্রশ্ন হোক) —
+  // প্রতিটা আলাদা বক্সে না দিয়ে, একটা "Written Part" এর সবগুলো এক জায়গায় জমিয়ে রেখে শেষে
+  // একটাই "Short answer" টেক্সটবক্সে বসানো হচ্ছে — যেহেতু এগুলোর উত্তর শিক্ষার্থী তার খাতায়
+  // লিখবে, ফর্মে শুধু প্রশ্নগুলো তালিকা আকারে দেখানোই যথেষ্ট
+  let writtenBuf = [];
+  function flushWrittenBuf(){
+    if(!writtenBuf.length) return;
+    code += '  // লিখিত অংশ — সবগুলো প্রশ্ন একটাই বক্সে, উত্তর খাতায় লিখবে\n';
+    code += '  item = form.addTextItem();\n';
+    code += '  item.setTitle("' + escGs(writtenBuf.join('\n')) + '").setRequired(false);\n\n';
+    writtenBuf = [];
+  }
   parsedQuestions.forEach((q)=>{
     // সোর্স ডকে যদি "Written Part 40", "Marketing: ০৮×০১=০৮", "English" এর মতো একটা আলাদা
     // সেকশন/বিষয় হেডার লাইন পাওয়া যায়, সেটাকে একটা নতুন Google Form পেজের শিরোনাম হিসেবে
-    // বসিয়ে দিচ্ছি — ঠিক ওই হেডারের পরের প্রশ্নগুলোর ঠিক আগে
+    // বসিয়ে দিচ্ছি — ঠিক ওই হেডারের পরের প্রশ্নগুলোর ঠিক আগে। প্রতিটা হেডারের জন্য একটাই
+    // সেকশন — তাই আগের হেডারের অধীনে জমে থাকা লিখিত প্রশ্নগুলো এখানেই বক্সে বসিয়ে দেওয়া হচ্ছে
     if(q.sectionHeaderRaw){
+      flushWrittenBuf();
       // form.addPageBreakItem() ব্যবহার করলে Google Form-এ আলাদা "Section X of Y" পেজ তৈরি হয়ে
       // যেত (নেভিগেশন ড্রপডাউনসহ) — সেটা চাওয়া হয়নি। তার বদলে addSectionHeaderItem() ব্যবহার
       // করা হচ্ছে, যেটা শুধু একটা শিরোনাম + "Description (optional)" হিসেবে বসে, পেজ ভাঙে না
@@ -3585,6 +3583,7 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
       code += '  item.setTitle("' + escGs(q.sectionHeaderRaw) + '");\n\n';
       lastChapter = null; // নতুন বিষয় শুরু হলে অধ্যায়ের নামটাও আবার নতুন করে দেখানো হোক
     } else if(q.chapter && q.chapter !== lastChapter){
+      flushWrittenBuf();
       // এই টুলে অধ্যায়ের নাম প্রতিটা প্রশ্ন/অনুচ্ছেদের সাথেই (q.chapter) জোড়া থাকে —
       // আগেরটার চেয়ে অধ্যায় পাল্টালে একটা নতুন Section Header বসিয়ে দিচ্ছি
       code += '  // অধ্যায়/বিষয় শিরোনাম\n';
@@ -3594,6 +3593,7 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
     if(q.chapter) lastChapter = q.chapter;
 
     if(q.type === 'passage'){
+      flushWrittenBuf();
       // উদ্দীপক/অনুচ্ছেদ — SectionHeaderItem ব্যবহার করা হচ্ছে কারণ এটাতে setPoints/setRequired নেই,
       // আগে addTextItem() দিয়ে setPoints(0) কল করাতে "Invalid data updating form" এরর হচ্ছিল
       code += '  // উদ্দীপক/অনুচ্ছেদ\n';
@@ -3617,18 +3617,14 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
       qLabel += '\n' + (q.statementPrompt || 'নিচের কোনটি সঠিক?');
     }
     if(q.subparts && q.subparts.length){
-      // একাধিক উপ-অংশের লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ) — মূল প্রশ্নটা একটা সেকশন-হেডার,
-      // আর প্রতিটা উপ-অংশ (ক/খ/গ/ঘ বা a/b/c/d) নিজের আলাদা "Short answer" টেক্সটবক্স — বাধ্যতামূলক
-      // না, কোনো পয়েন্ট/মার্কস বসছে না, আর Word ফাইলে উত্তর থাকলেও সেটা ফর্মে দেখানো হচ্ছে না —
-      // শুধু প্রশ্নটাই থাকছে (শিক্ষার্থীর কাছে উত্তর প্রকাশ পাওয়া ঠিক না)
-      code += '  item = form.addSectionHeaderItem();\n';
-      code += '  item.setTitle("' + escGs(qLabel) + '");\n\n';
+      // একাধিক উপ-অংশের লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ) — স্টেম আর প্রতিটা উপ-অংশ
+      // (ক/খ/গ/ঘ বা a/b/c/d) একই কম্বাইন্ড লিখিত-বক্সে লাইন আকারে জমা হচ্ছে
+      writtenBuf.push(qLabel);
       q.subparts.forEach(sp=>{
-        const spLabel = sp.label + ') ' + sp.text;
-        code += '  item = form.addParagraphTextItem();\n';
-        code += '  item.setTitle("' + escGs(spLabel) + '").setRequired(false);\n\n';
+        writtenBuf.push(sp.label + ') ' + sp.text);
       });
     } else if(q.type === 'mcq' && q.options.length > 0){
+      flushWrittenBuf(); // MCQ প্রশ্ন এলে আগে জমে থাকা লিখিত প্রশ্নগুলো বক্সে বসিয়ে দেওয়া হচ্ছে
       const correctIdx = resolveCorrectIndex(q);
       const uniqueOpts = dedupeOptions(q.options);
       const isBn = isBengaliText(q.text) || q.options.some(o=>isBengaliText(o));
@@ -3641,13 +3637,12 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
       });
       code += '  ]);\n\n';
     } else {
-      // লিখিত/সংক্ষিপ্ত প্রশ্ন — বড় প্যারাগ্রাফ টেক্সটবক্স দেওয়া হচ্ছে, বাধ্যতামূলক না, কোনো
-      // পয়েন্ট/মার্কস বসছে না (চাইলে পরে নিজে ম্যানুয়ালি যোগ করা যাবে), আর Word ফাইলে উত্তর
+      // লিখিত/সংক্ষিপ্ত প্রশ্ন — কম্বাইন্ড লিখিত-বক্সে লাইন আকারে জমা হচ্ছে, Word ফাইলে উত্তর
       // থাকলেও সেটা ফর্মে দেখানো হচ্ছে না — শুধু প্রশ্নটাই থাকছে
-      code += '  item = form.addParagraphTextItem();\n';
-      code += '  item.setTitle("' + escGs(qLabel) + '").setRequired(false);\n\n';
+      writtenBuf.push(qLabel);
     }
   });
+  flushWrittenBuf(); // ডকুমেন্টের শেষে যদি লিখিত প্রশ্ন জমে থাকে, সেটা এখানে বক্সে বসিয়ে দেওয়া হচ্ছে
 
   code += '  Logger.log("ফর্ম এডিট লিংক: " + form.getEditUrl());\n';
   code += '  Logger.log("ফর্ম পাবলিশড লিংক: " + form.getPublishedUrl());\n';
