@@ -1245,14 +1245,18 @@ function parseQuestions(text){
   // "ব্যাখ্যা:" শব্দটা আর থাকে না — শুধু isHeaderCandidate দিয়ে চেক করলে ব্যাখ্যার একদম শেষ লাইনটা
   // (যেটার ঠিক পরেই পরের প্রশ্ন শুরু হয়) ভুল করে বিষয়-হেডার বলে ধরে ফেলতো। তাই এখানে একটা
   // "ব্যাখ্যা চলছে" স্টেট রাখা হচ্ছে — নতুন প্রশ্ন/অপশন/উত্তর/হেডিং না আসা পর্যন্ত সেই স্টেটে
-  // থাকা কোনো লাইনকেই হেডার-প্রার্থী হিসেবে গণ্য করা হবে না
-  let __inExplanation = false;
+  // থাকা কোনো লাইনকেই হেডার-প্রার্থী হিসেবে গণ্য করা হবে না। তবে এই দমন করাটা সীমাহীন সময়ের
+  // জন্য না — "ব্যাখ্যা:" এর পরের সর্বোচ্চ ২ লাইন পর্যন্তই ধরে রাখা হচ্ছে (বাস্তব ডকে দেখা
+  // দুটো কেসেই ব্যাখ্যা ২ লাইনের মধ্যে শেষ হয়), তারপর অটো বন্ধ হয়ে যাচ্ছে। নাহলে "Marketing"
+  // এর মতো আসল হেডার লাইন, যেটা আগের প্রশ্নের ব্যাখ্যার ঠিক পরেই আসে, ভুল করে ব্যাখ্যার
+  // ধারাবাহিক অংশ বলে বাদ পড়ে যাচ্ছিল
+  let __explanationLinesLeft = 0;
   const headerLineFlags = lines.map((line, idx)=>{
-    if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)){ __inExplanation = true; return false; }
+    if(/^(?:ব্যাখ্যা|explanation|note|নোট)\s*[:।\-]?/i.test(line)){ __explanationLinesLeft = 2; return false; }
     if(qRe.test(line) || romanRe.test(line) || optRe.test(line) || ansRe.test(line) || passageRe.test(line) || chapterHeadingTestRe.test(line) || sectionHeadingRe.test(line) || sessionHeadingRe.test(line)){
-      __inExplanation = false;
+      __explanationLinesLeft = 0;
     }
-    if(__inExplanation) return false;
+    if(__explanationLinesLeft > 0){ __explanationLinesLeft--; return false; }
     if(!isHeaderCandidate(line)) return false;
     const next = lines[idx+1];
     return !!(next && (qRe.test(next) || romanRe.test(next)));
@@ -1349,8 +1353,13 @@ function parseQuestions(text){
       // থেকেই এই প্যাটার্নে পড়ে গেছে), তাহলে এটা সাধারণ MCQ অপশন না — বরং প্রতিটা লেবেলের
       // নিজস্ব উত্তরসহ একটা "মাল্টি-পার্ট লিখিত" প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ, প্রতিটার
       // আলাদা Ans)। এক্ষেত্রে current.subparts এ আলাদা এন্ট্রি হিসেবে রাখা হচ্ছে, options/answerRaw এ না।
+      // তবে এই লাইনেই যদি একাধিক অপশন (যেমন "a) ৮.৮%    b) ৭.২%    c) ৯.০২%    d) ৮.২১%")
+      // গাদাগাদি করে একই লাইনে বসানো থাকে, তাহলে সেটা আসলে সাধারণ MCQ-ই — পরের লাইনে "Ans:"
+      // থাকলেও এটাকে মাল্টি-পার্ট ধরা হবে না, নাহলে গোটা MCQ-টাই ভুল করে ১টা এলোমেলো
+      // সাব-পার্টে পরিণত হয়ে যায়
+      const hasMultipleInlineOptions = /(?:\t+|[ \u00A0]{2,})[\(\[]?[কখগঘঙa-dA-D]\s*[\)\]।.:]/.test(om[2]);
       const looksLikeOwnAnswerNext = ansRe.test(nextLine);
-      if(current.isMultiPart || (current.options.length === 0 && looksLikeOwnAnswerNext)){
+      if(!hasMultipleInlineOptions && (current.isMultiPart || (current.options.length === 0 && looksLikeOwnAnswerNext))){
         current.isMultiPart = true;
         if(!current.subparts) current.subparts = [];
         const sp = { label: om[1], text: om[2].trim(), answerRaw: '' };
@@ -3617,12 +3626,18 @@ document.getElementById('gformGenerateBtn').addEventListener('click', ()=>{
       qLabel += '\n' + (q.statementPrompt || 'নিচের কোনটি সঠিক?');
     }
     if(q.subparts && q.subparts.length){
-      // একাধিক উপ-অংশের লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ) — স্টেম আর প্রতিটা উপ-অংশ
-      // (ক/খ/গ/ঘ বা a/b/c/d) একই কম্বাইন্ড লিখিত-বক্সে লাইন আকারে জমা হচ্ছে
-      writtenBuf.push(qLabel);
+      // একাধিক উপ-অংশের লিখিত প্রশ্ন (যেমন: চারটা বাক্য অনুবাদ) — প্রতিটা নাম্বার করা স্টেম
+      // (০১, ০২, ০৩...) নিজের আলাদা বক্সে বসবে, অন্য স্টেমের সাথে মিশবে না। তাই আগে যদি
+      // কোনো প্লেইন লিখিত প্রশ্ন জমে থাকে সেটা আগে বক্সে বসিয়ে দিচ্ছি, তারপর এই স্টেম +
+      // তার সব সাব-পার্ট মিলিয়ে নিজের একটা আলাদা বক্স তৈরি করে সাথে সাথেই বসিয়ে দিচ্ছি
+      flushWrittenBuf();
+      const stemLines = [qLabel];
       q.subparts.forEach(sp=>{
-        writtenBuf.push(sp.label + ') ' + sp.text);
+        stemLines.push(sp.label + ') ' + sp.text);
       });
+      code += '  // লিখিত অংশ (উপ-প্রশ্নসহ) — একটাই বক্সে, উত্তর খাতায় লিখবে\n';
+      code += '  item = form.addTextItem();\n';
+      code += '  item.setTitle("' + escGs(stemLines.join('\n')) + '").setRequired(false);\n\n';
     } else if(q.type === 'mcq' && q.options.length > 0){
       flushWrittenBuf(); // MCQ প্রশ্ন এলে আগে জমে থাকা লিখিত প্রশ্নগুলো বক্সে বসিয়ে দেওয়া হচ্ছে
       const correctIdx = resolveCorrectIndex(q);
